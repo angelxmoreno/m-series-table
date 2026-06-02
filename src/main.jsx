@@ -1,0 +1,9 @@
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import AppleSiliconTable from "./AppleSiliconTable.jsx";
+
+createRoot(document.getElementById("root")).render(
+  <StrictMode>
+    <AppleSiliconTable />
+  </StrictMode>
+);

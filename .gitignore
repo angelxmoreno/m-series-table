@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+bun.lockb
+
+# Build outputs
+dist/
+.next/
+!.next/cache/**
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+coverage/
+
+# Turbo
+.turbo/
+
+# Database
+migrations/
+
+# MinIO data (if running locally outside Docker)
+minio-data/
+.fallow/
