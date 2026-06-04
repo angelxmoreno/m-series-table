@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -10,7 +10,7 @@ import chips from "./chips.json";
 const fmt = (v, s = "") =>
   v === null || v === undefined ? "—" : `${v}${s}`;
 
-// Column-level metadata. `filter` is derived per column below from the data:
+// Per-column metadata. `filter` is derived per column below from the data:
 //   - omitted         -> no filter (chip, processNode, etc.)
 //   - { type: "set" } -> checkbox list of unique values
 //   - { type: "range" }-> min/max number inputs, bounded by data min/max
@@ -32,7 +32,7 @@ const COLUMN_DEFS = [
   { accessorKey: "thunderbolt", header: "TB", description: "Thunderbolt generation supported. TB4 = 40 Gb/s, TB5 = 80 Gb/s.", filter: { type: "set" } },
 ];
 
-// Sensible default visible subset (the rest are available in the Columns popover).
+// Default visible subset. The rest are available in the Columns popover.
 const DEFAULT_VISIBLE = [
   "chip",
   "generation",
@@ -42,15 +42,22 @@ const DEFAULT_VISIBLE = [
   "gpuCores",
 ];
 
-const TIER_COLOR = {
-  Base: "#5fffb0",
-  Pro: "#5fc8ff",
-  Max: "#ff9f5f",
-  Ultra: "#ff5fff",
+// Map tier to a daisyUI badge variant.
+const TIER_BADGE = {
+  Base: "badge-success",
+  Pro: "badge-info",
+  Max: "badge-warning",
+  Ultra: "badge-secondary",
 };
 
+// Subtle per-generation text tint (kept inline because it's data, not theme).
 const GEN_COLOR = {
   M1: "#999", M2: "#bbb", M3: "#5fc8ff", M4: "#5fffb0", M5: "#ff5fff",
+};
+const TB_COLOR = {
+  TB3: "#aaa",
+  TB4: "#5fc8ff",
+  TB5: "#ff9f5f",
 };
 
 function downloadCSV(data) {
@@ -76,7 +83,7 @@ function downloadCSV(data) {
 // Default per-column filter state (means "no filter applied").
 function defaultFilterValue(col) {
   if (!col.filter) return undefined;
-  if (col.filter.type === "set") return new Set(); // empty set = no filter
+  if (col.filter.type === "set") return new Set();
   if (col.filter.type === "range") return [col.filter.min, col.filter.max];
 }
 
@@ -88,7 +95,7 @@ function isFilterActive(col, value) {
 }
 
 function FilterDialog({ col, value, onChange, onClose }) {
-  // For set filters, a working copy of the Set so toggling doesn't commit until "Done".
+  const dialogRef = useRef(null);
   const [working, setWorking] = useState(
     col.filter.type === "set" ? (value ?? defaultFilterValue(col)) : null
   );
@@ -101,11 +108,19 @@ function FilterDialog({ col, value, onChange, onClose }) {
   );
 
   useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    const dlg = dialogRef.current;
+    if (!dlg) return;
+    if (!dlg.open) dlg.showModal();
+    const handleClose = () => onClose();
+    dlg.addEventListener("close", handleClose);
+    // jsdom doesn't fire a cancel event on Esc; real browsers do. Belt and
+    // suspenders: also call close() explicitly on Esc, idempotent in either env.
+    const handleKey = (e) => { if (e.key === "Escape" && dlg.open) dlg.close(); };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      dlg.removeEventListener("close", handleClose);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, [onClose]);
 
   function commit(next) {
@@ -125,48 +140,28 @@ function FilterDialog({ col, value, onChange, onClose }) {
   }
 
   return (
-    <div
-      role="presentation"
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 100,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}
-    >
-      <div
-        role="dialog"
-        aria-label={`Filter by ${col.header}`}
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "#0a0a0a",
-          border: "1px solid #1f1f1f",
-          borderRadius: "5px",
-          minWidth: "320px",
-          maxWidth: "480px",
-          padding: "1.15rem 1.3rem",
-          boxShadow: "0 12px 40px rgba(0,0,0,0.7)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.85rem" }}>
-          <span style={{ fontSize: "0.8rem", color: "#aaa", textTransform: "uppercase", letterSpacing: "0.12em" }}>
+    <dialog ref={dialogRef} aria-label={`Filter by ${col.header}`} className="modal">
+      <div className="modal-box max-w-md">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs uppercase tracking-widest text-base-content/60">
             Filter · {col.header}
           </span>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close"
-            style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: "1.2rem", padding: 0, lineHeight: 1 }}
+            className="btn btn-sm btn-ghost btn-square"
           >
             ✕
           </button>
         </div>
 
         {col.filter.type === "set" ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1rem" }}>
+          <div className="flex flex-col gap-2 mb-4">
             {col.filter.values.map((v) => {
               const checked = working.has(v);
               return (
-                <label key={v} style={{ display: "flex", alignItems: "center", gap: "0.6rem", cursor: "pointer", fontSize: "1rem", color: checked ? "#e8e8e8" : "#aaa" }}>
+                <label key={v} className="label cursor-pointer gap-3 justify-start py-1">
                   <input
                     type="checkbox"
                     checked={checked}
@@ -175,112 +170,109 @@ function FilterDialog({ col, value, onChange, onClose }) {
                       if (next.has(v)) next.delete(v); else next.add(v);
                       setWorking(next);
                     }}
-                    style={{ accentColor: "#5fffb0", cursor: "pointer", width: "1.05rem", height: "1.05rem" }}
+                    className="checkbox checkbox-sm checkbox-success"
                   />
-                  <span style={{ textTransform: "capitalize" }}>{v}</span>
+                  <span className="label-text capitalize">{v}</span>
                 </label>
               );
             })}
           </div>
         ) : (
-          <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-end", marginBottom: "0.5rem" }}>
-            <div style={{ flex: 1 }}>
-              <label htmlFor="filter-min" style={{ display: "block", fontSize: "0.8rem", color: "#888", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.35rem" }}>Min</label>
-              <input
-                id="filter-min"
-                type="number"
-                autoFocus
-                value={minStr}
-                onChange={(e) => setMinStr(e.target.value)}
-                style={{ width: "100%", background: "#0c0c0c", border: "1px solid #333", color: "#e8e8e8", padding: "0.55rem 0.7rem", fontSize: "1rem", fontFamily: "inherit", borderRadius: "3px", outline: "none" }}
-              />
+          <>
+            <div className="flex gap-3 mb-1">
+              <div className="flex-1">
+                <label htmlFor="filter-min" className="block text-xs uppercase tracking-widest text-base-content/60 mb-1">
+                  Min
+                </label>
+                <input
+                  id="filter-min"
+                  type="number"
+                  autoFocus
+                  value={minStr}
+                  onChange={(e) => setMinStr(e.target.value)}
+                  className="input input-bordered input-sm w-full font-mono"
+                />
+              </div>
+              <div className="flex-1">
+                <label htmlFor="filter-max" className="block text-xs uppercase tracking-widest text-base-content/60 mb-1">
+                  Max
+                </label>
+                <input
+                  id="filter-max"
+                  type="number"
+                  value={maxStr}
+                  onChange={(e) => setMaxStr(e.target.value)}
+                  className="input input-bordered input-sm w-full font-mono"
+                />
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <label htmlFor="filter-max" style={{ display: "block", fontSize: "0.8rem", color: "#888", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.35rem" }}>Max</label>
-              <input
-                id="filter-max"
-                type="number"
-                value={maxStr}
-                onChange={(e) => setMaxStr(e.target.value)}
-                style={{ width: "100%", background: "#0c0c0c", border: "1px solid #333", color: "#e8e8e8", padding: "0.55rem 0.7rem", fontSize: "1rem", fontFamily: "inherit", borderRadius: "3px", outline: "none" }}
-              />
+            <div className="text-xs text-base-content/50 mb-3">
+              data range: {col.filter.min}–{col.filter.max}
             </div>
-          </div>
+          </>
         )}
 
-        {col.filter.type === "range" && (
-          <div style={{ fontSize: "0.85rem", color: "#888", marginBottom: "1rem" }}>
-            data range: {col.filter.min}–{col.filter.max}
-          </div>
-        )}
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-          <button
-            onClick={clear}
-            style={{ background: "transparent", border: "1px solid #333", color: "#aaa", padding: "0.5rem 1rem", fontSize: "0.85rem", fontFamily: "inherit", borderRadius: "3px", cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase" }}
-          >
+        <div className="modal-action mt-2">
+          <button type="button" onClick={clear} className="btn btn-sm btn-ghost">
             Clear
           </button>
           <button
+            type="button"
             onClick={col.filter.type === "range" ? commitRange : () => commit(working)}
-            style={{ background: "transparent", border: "1px solid #1e2e22", color: "#5fffb0", padding: "0.5rem 1rem", fontSize: "0.85rem", fontFamily: "inherit", borderRadius: "3px", cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase" }}
+            className="btn btn-sm btn-success"
           >
             Done
           </button>
         </div>
       </div>
-    </div>
+      <form method="dialog" className="modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
   );
 }
 
 function ColumnsPopover({ all, visible, onToggle, onClose }) {
+  const ref = useRef(null);
+
   useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    const dlg = ref.current;
+    if (!dlg) return;
+    if (!dlg.open) dlg.showModal();
+    const handleClose = () => onClose();
+    const handleKey = (e) => { if (e.key === "Escape" && dlg.open) dlg.close(); };
+    dlg.addEventListener("close", handleClose);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      dlg.removeEventListener("close", handleClose);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, [onClose]);
 
   return (
-    <div
-      role="presentation"
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 90 }}
-    >
-      <div
-        role="dialog"
-        aria-label="Choose columns"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: "absolute",
-          top: 70, right: 24,
-          background: "#0a0a0a",
-          border: "1px solid #1f1f1f",
-          borderRadius: "5px",
-          minWidth: "260px",
-          padding: "1rem 1.15rem",
-          boxShadow: "0 12px 40px rgba(0,0,0,0.7)",
-        }}
-      >
-        <div style={{ fontSize: "0.8rem", color: "#aaa", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: "0.7rem" }}>
+    <dialog ref={ref} aria-label="Choose columns" className="modal">
+      <div className="modal-box max-w-xs p-4">
+        <div className="text-xs uppercase tracking-widest text-base-content/60 mb-3">
           Columns
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+        <div className="flex flex-col gap-2">
           {all.map((col) => (
-            <label key={col.accessorKey} style={{ display: "flex", alignItems: "center", gap: "0.6rem", cursor: "pointer", fontSize: "1rem", color: visible.has(col.accessorKey) ? "#e8e8e8" : "#999" }}>
+            <label key={col.accessorKey} className="label cursor-pointer gap-3 justify-start py-1">
               <input
                 type="checkbox"
                 checked={visible.has(col.accessorKey)}
                 onChange={() => onToggle(col.accessorKey)}
-                style={{ accentColor: "#5fffb0", cursor: "pointer", width: "1.05rem", height: "1.05rem" }}
+                className="checkbox checkbox-sm checkbox-success"
               />
-              <span>{col.header}</span>
+              <span className="label-text">{col.header}</span>
             </label>
           ))}
         </div>
       </div>
-    </div>
+      <form method="dialog" className="modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
   );
 }
 
@@ -294,14 +286,15 @@ export default function AppleSiliconTable() {
   const [columnFilters, setColumnFilters] = useState({});
   const [activeFilterKey, setActiveFilterKey] = useState(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
-  const tableContainerRef = useRef(null);
 
-  // Augment each column with its derived filter config (set values or range bounds).
+  // Augment each column with its derived filter config.
   const COLUMNS = useMemo(() => {
     return COLUMN_DEFS.map((c) => {
       if (!c.filter) return c;
       if (c.filter.type === "set") {
-        const values = Array.from(new Set(chips.map((chip) => chip[c.accessorKey]).filter((v) => v !== null && v !== undefined))).sort();
+        const values = Array.from(
+          new Set(chips.map((chip) => chip[c.accessorKey]).filter((v) => v !== null && v !== undefined))
+        ).sort();
         return { ...c, filter: { type: "set", values } };
       }
       if (c.filter.type === "range") {
@@ -327,7 +320,7 @@ export default function AppleSiliconTable() {
           if (f.size > 0 && !f.has(c[col.accessorKey])) return false;
         } else if (col.filter?.type === "range") {
           const v = c[col.accessorKey];
-          if (v === null || v === undefined) return false; // nulls excluded by range filters
+          if (v === null || v === undefined) return false;
           if (v < f[0] || v > f[1]) return false;
         }
       }
@@ -344,18 +337,6 @@ export default function AppleSiliconTable() {
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const mono = "'JetBrains Mono','Fira Code','Courier New',monospace";
-  const ctrl = {
-    background: "#0c0c0c",
-    border: "1px solid #222",
-    color: "#e8e8e8",
-    padding: "0.6rem 0.9rem",
-    fontSize: "1rem",
-    fontFamily: mono,
-    borderRadius: "3px",
-    outline: "none",
-  };
-
   const activeFilterCol = activeFilterKey ? COLUMNS.find((c) => c.accessorKey === activeFilterKey) : null;
 
   function toggleColumn(key) {
@@ -367,45 +348,51 @@ export default function AppleSiliconTable() {
   }
 
   return (
-    <div ref={tableContainerRef} style={{ background: "#050505", minHeight: "100vh", fontFamily: mono, color: "#e8e8e8", padding: "1.5rem", fontSize: "1rem" }}>
-
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: "1.5rem", borderBottom: "1px solid #181818", paddingBottom: "1.25rem" }}>
+    <div className="min-h-screen bg-base-100 text-base-content p-6 font-mono">
+      {/* Header */}
+      <div className="flex items-end justify-between mb-6 border-b border-base-300 pb-5">
         <div>
-          <h1 style={{ fontSize: "2.25rem", fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", margin: 0 }}>Apple Silicon</h1>
-          <p style={{ fontSize: "0.95rem", color: "#777", marginTop: "0.35rem", letterSpacing: "0.1em", textTransform: "uppercase" }}>M-Series · M1 through M5 Max</p>
+          <h1 className="text-3xl font-bold tracking-tight">Apple Silicon</h1>
+          <p className="text-sm text-base-content/60 uppercase tracking-widest mt-1">
+            M-Series · M1 through M5 Max
+          </p>
         </div>
-        <span style={{ fontSize: "0.95rem", color: "#666", letterSpacing: "0.06em" }}>{filtered.length} / {chips.length} chips</span>
+        <span className="text-sm text-base-content/60">
+          {filtered.length} / {chips.length} chips
+        </span>
       </div>
 
-      <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.25rem", flexWrap: "wrap", alignItems: "center" }}>
-        <span style={{ fontSize: "0.85rem", color: "#888", textTransform: "uppercase", letterSpacing: "0.1em" }}>Search</span>
+      {/* Table controls */}
+      <div className="flex flex-wrap items-center gap-3 mb-5">
+        <span className="text-xs text-base-content/60 uppercase tracking-widest">Search</span>
         <input
-          style={{ ...ctrl, width: "220px", cursor: "text" }}
+          className="input input-bordered input-sm w-56 font-mono"
           placeholder="e.g. M3 Max"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <button
-          onClick={() => setColumnsOpen((v) => !v)}
-          style={{ background: "transparent", border: "1px solid #333", color: "#ccc", padding: "0.6rem 1rem", fontSize: "0.95rem", fontFamily: mono, borderRadius: "3px", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}
+          type="button"
+          onClick={() => setColumnsOpen(true)}
+          className="btn btn-sm btn-ghost"
         >
           ⠿ Columns
         </button>
         <button
+          type="button"
           onClick={() => downloadCSV(filtered)}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#0a1a10")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-          style={{ marginLeft: "auto", background: "transparent", border: "1px solid #1e2e22", color: "#5fffb0", padding: "0.6rem 1.1rem", fontSize: "0.95rem", fontFamily: mono, borderRadius: "3px", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}
+          className="btn btn-sm btn-success btn-outline ml-auto"
         >
           ↓ Export CSV
         </button>
       </div>
 
-      <div style={{ overflowX: "auto", borderRadius: "5px", border: "1px solid #161616" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "1rem" }}>
+      {/* Table */}
+      <div className="overflow-x-auto rounded-box border border-base-300">
+        <table className="table table-zebra table-pin-rows">
           <thead>
             {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id}>
+              <tr key={hg.id} className="bg-base-200">
                 {hg.headers.map((h) => {
                   const colDef = h.column.columnDef;
                   const filterActive = isFilterActive(colDef, columnFilters[colDef.accessorKey]);
@@ -414,38 +401,21 @@ export default function AppleSiliconTable() {
                       key={h.id}
                       onMouseEnter={() => setHoveredCol(h.id)}
                       onMouseLeave={() => setHoveredCol(null)}
-                      style={{ position: "relative", background: "#070707", color: hoveredCol === h.id ? "#5fffb0" : "#777", fontWeight: 600, padding: "0.85rem 1rem", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.1em", fontSize: "0.9rem", borderBottom: "1px solid #161616", whiteSpace: "nowrap", userSelect: "none", transition: "color 0.15s" }}
+                      className="relative text-xs uppercase tracking-widest text-base-content/70 font-semibold select-none"
                     >
                       <span
                         onClick={h.column.getToggleSortingHandler()}
-                        style={{ cursor: h.column.getCanSort() ? "pointer" : "default" }}
+                        className={h.column.getCanSort() ? "cursor-pointer" : "cursor-default"}
                       >
                         {flexRender(colDef.header, h.getContext())}
                         {h.column.getIsSorted() === "asc" ? " ↑" : h.column.getIsSorted() === "desc" ? " ↓" : ""}
                       </span>
                       {colDef.filter && (
                         <button
+                          type="button"
                           aria-label={`Filter ${colDef.header}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveFilterKey(colDef.accessorKey);
-                          }}
-                          style={{
-                            marginLeft: "0.5rem",
-                            background: "transparent",
-                            border: "1px solid transparent",
-                            color: filterActive ? "#5fffb0" : (hoveredCol === h.id ? "#5fffb0" : "#888"),
-                            cursor: "pointer",
-                            padding: "0 0.3rem",
-                            fontSize: "1.1rem",
-                            lineHeight: 1.2,
-                            fontFamily: mono,
-                            fontWeight: 700,
-                            textTransform: "none",
-                            letterSpacing: 0,
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#333")}
-                          onMouseLeave={(e) => (e.currentTarget.style.borderColor = "transparent")}
+                          onClick={() => setActiveFilterKey(colDef.accessorKey)}
+                          className={`btn btn-xs btn-ghost btn-square ml-1 ${filterActive ? "text-success" : "text-base-content/60"}`}
                         >
                           ▾
                         </button>
@@ -453,26 +423,7 @@ export default function AppleSiliconTable() {
                       {hoveredCol === h.id && colDef.description && (
                         <div
                           role="tooltip"
-                          style={{
-                            position: "absolute",
-                            top: "calc(100% + 6px)",
-                            left: 0,
-                            zIndex: 10,
-                            maxWidth: "320px",
-                            minWidth: "180px",
-                            padding: "0.65rem 0.85rem",
-                            background: "#0a0a0a",
-                            border: "1px solid #1f1f1f",
-                            borderRadius: "3px",
-                            color: "#d8d8d8",
-                            textTransform: "none",
-                            letterSpacing: "0",
-                            fontWeight: 400,
-                            fontSize: "0.95rem",
-                            lineHeight: 1.45,
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.6)",
-                            pointerEvents: "none",
-                          }}
+                          className="absolute top-full left-0 z-20 mt-1.5 max-w-xs min-w-44 px-3 py-2 bg-base-200 border border-base-300 rounded text-sm normal-case tracking-normal font-normal leading-snug shadow-lg pointer-events-none"
                         >
                           {colDef.description}
                         </div>
@@ -486,7 +437,10 @@ export default function AppleSiliconTable() {
           <tbody>
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={visibleColumns.length} style={{ textAlign: "center", color: "#555", padding: "3rem", letterSpacing: "0.12em", fontSize: "1rem" }}>
+                <td
+                  colSpan={visibleColumns.length}
+                  className="py-12 text-center text-base-content/40 uppercase tracking-widest"
+                >
                   NO CHIPS MATCH YOUR FILTERS
                 </td>
               </tr>
@@ -497,7 +451,7 @@ export default function AppleSiliconTable() {
                 return (
                   <tr
                     key={row.id}
-                    style={{ background: hoveredRow === i ? "#111" : i % 2 === 0 ? "#060606" : "#090909", transition: "background 0.1s" }}
+                    className={`hover transition-colors ${hoveredRow === i ? "bg-base-200" : ""}`}
                     onMouseEnter={() => setHoveredRow(i)}
                     onMouseLeave={() => setHoveredRow(null)}
                   >
@@ -506,23 +460,22 @@ export default function AppleSiliconTable() {
                       const val = cell.getValue();
                       let content;
                       if (col === "chip") {
-                        content = <span style={{ fontFamily: mono, fontWeight: 700, color: "#ffffff", letterSpacing: "0.03em" }}>{val}</span>;
+                        content = <span className="font-bold text-base-content tracking-wide">{val}</span>;
                       } else if (col === "tier") {
-                        const c = TIER_COLOR[tier] ?? "#888";
-                        content = <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: "3px", fontSize: "0.85rem", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, border: `1px solid ${c}44`, color: c, background: `${c}15` }}>{val}</span>;
+                        const variant = TIER_BADGE[tier] ?? "badge-ghost";
+                        content = <span className={`badge badge-md ${variant} badge-soft font-semibold`}>{val}</span>;
                       } else if (col === "generation") {
-                        content = <span style={{ color: GEN_COLOR[gen] ?? "#bbb", fontWeight: 600 }}>{val}</span>;
+                        content = <span className="font-semibold" style={{ color: GEN_COLOR[gen] ?? undefined }}>{val}</span>;
                       } else if (col === "thunderbolt") {
-                        const tbColor = val === "TB5" ? "#ff9f5f" : val === "TB4" ? "#5fc8ff" : "#aaa";
-                        content = <span style={{ color: tbColor, fontWeight: 600 }}>{val}</span>;
+                        content = <span className="font-semibold" style={{ color: TB_COLOR[val] ?? undefined }}>{val}</span>;
                       } else {
-                        content = <span style={{ color: val === null || val === undefined ? "#555" : "#d0d0d0" }}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</span>;
+                        content = (
+                          <span className={val === null || val === undefined ? "text-base-content/30" : "text-base-content/80"}>
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </span>
+                        );
                       }
-                      return (
-                        <td key={cell.id} style={{ padding: "0.8rem 1rem", borderBottom: "1px solid #0e0e0e", whiteSpace: "nowrap" }}>
-                          {content}
-                        </td>
-                      );
+                      return <td key={cell.id} className="whitespace-nowrap">{content}</td>;
                     })}
                   </tr>
                 );
@@ -532,7 +485,7 @@ export default function AppleSiliconTable() {
         </table>
       </div>
 
-      <div style={{ marginTop: "0.85rem", fontSize: "0.85rem", color: "#888", letterSpacing: 0 }}>
+      <div className="mt-3 text-sm text-base-content/50">
         Click a column header to sort · Click ▾ on a column to filter · Pick columns to show from the top bar
       </div>
 

@@ -11,9 +11,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@tanstack/react-table": "^8.21.3",
+    "daisyui": "^5.5.20",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "@tanstack/react-table": "^8.21.3"
+    "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
