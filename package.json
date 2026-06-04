@@ -6,15 +6,22 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "export-csv": "bun export-csv.js"
+    "export-csv": "bun export-csv.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@tanstack/react-table": "^8.20.5"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "@tanstack/react-table": "^8.21.3"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.21"
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitejs/plugin-react": "^6.0.2",
+    "jsdom": "^29.1.1",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
   }
 }
