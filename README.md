@@ -108,7 +108,7 @@ To enable for your fork:
 
 The custom domain is configured via `public/CNAME` (Vite copies that file to `dist/` as-is, and GitHub Pages reads it on deploy). For the custom domain to resolve, add a DNS record at your domain registrar pointing `m-series.axmdev.app` (or whichever subdomain) at GitHub's Pages servers — see the "Custom domain" section of the GitHub Pages settings page for the exact CNAME / A records they expect.
 
-> **Note:** `vite.config.js` sets `base: "/m-series-table/"`. That stays even with a custom domain — it tells Vite where the bundle is hosted (under the repo name on GitHub's servers), independent of the public URL your visitors see.
+> **Note:** `vite.config.js` sets `base: "/"`. With a custom domain, the bundle is served at the domain root, so the asset URLs in the build output are absolute-from-root (`/assets/...`). If you fork this repo and host under a subpath (e.g. `<user>.github.io/<repo>/` without a custom domain), change `base` back to `"/<repo>/"` so the asset URLs match.
 
 ## Notes
 
