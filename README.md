@@ -90,23 +90,25 @@ bun run build
 
 Output goes to `dist/`. Deploy that folder anywhere static — GitHub Pages, Cloudflare Pages, Netlify, etc.
 
-### GitHub Pages
+## GitHub Pages
 
-```bash
-bun add -d gh-pages
-```
+This repo deploys automatically to GitHub Pages on every push to `main`, served at **[m-series.axmdev.app](https://m-series.axmdev.app)** (custom domain).
 
-Add to `package.json` scripts:
+The pipeline lives in `.github/workflows/deploy.yml`:
 
-```json
-"deploy": "gh-pages -d dist"
-```
+1. `bun install` and `bun run build` produce `dist/`
+2. The build output is uploaded as a Pages artifact
+3. The `deploy` job publishes it via `actions/deploy-pages`
 
-Then:
+To enable for your fork:
 
-```bash
-bun run build && bun run deploy
-```
+1. Go to **Settings → Pages** in your GitHub repo
+2. Under **Source**, choose **GitHub Actions**
+3. Push to `main` (or trigger from the Actions tab) — the workflow does the rest
+
+The custom domain is configured via `public/CNAME` (Vite copies that file to `dist/` as-is, and GitHub Pages reads it on deploy). For the custom domain to resolve, add a DNS record at your domain registrar pointing `m-series.axmdev.app` (or whichever subdomain) at GitHub's Pages servers — see the "Custom domain" section of the GitHub Pages settings page for the exact CNAME / A records they expect.
+
+> **Note:** `vite.config.js` sets `base: "/m-series-table/"`. That stays even with a custom domain — it tells Vite where the bundle is hosted (under the repo name on GitHub's servers), independent of the public URL your visitors see.
 
 ## Notes
 
