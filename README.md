@@ -6,8 +6,9 @@ A hacker-themed, filterable, sortable comparison table for every Apple Silicon M
 
 - **Bun** — package manager + runtime
 - **Vite** — bundler
-- **React 18** — UI
+- **React 19** — UI
 - **TanStack Table v8** — sorting and filtering logic
+- **Tailwind CSS v4** + **daisyUI v5** — styling (built-in `dark` theme)
 
 ## Getting Started
 
@@ -28,6 +29,7 @@ apple-silicon-table/
 ├── export-csv.js               # Bun CLI script to export chips.csv
 └── src/
     ├── main.jsx                # React root
+    ├── index.css               # Tailwind + daisyUI imports
     ├── AppleSiliconTable.jsx   # Main table component
     └── chips.json              # All chip data — edit this to update the table
 ```
@@ -71,8 +73,13 @@ The **Export CSV** button in the UI also works — it exports whatever is curren
 ## Using the Table
 
 - **Search** — filter by chip name (e.g. `M3 Max`)
-- **Gen / Tier dropdowns** — filter by generation or tier
-- **Click any column header** — sort ascending/descending
+- **Click ▾ on a column header** — open that column's filter dialog
+  - Set filters (Gen, Tier, TB) — checkbox list of values
+  - Range filters (Year, CPU/Perf/Eff/GPU Cores, TOPS) — min/max number inputs
+  - `Clear` resets that column; `Done` commits; `Esc` or backdrop click closes
+- **Click a column header** — sort ascending/descending
+- **Hover a column header** — see the full description for that column
+- **Columns button** — pick which columns to show/hide
 - **Export CSV button** — downloads the current filtered view as a CSV
 
 ## Building for Production
@@ -107,3 +114,7 @@ bun run build && bun run deploy
 - M5 Pro/Max use a new core naming convention (Super + Performance cores) but are mapped to the same `perfCores`/`efficiencyCores` fields for consistency
 - No M4 Ultra was released — Apple skipped it
 - M5 Ultra is not yet announced
+
+## License
+
+[MIT](LICENSE) © 2026 Angel S. Moreno
