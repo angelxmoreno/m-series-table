@@ -7,7 +7,6 @@ export default defineConfig(({ mode }) => {
   // want the PostHog values guaranteed to reach the bundle even if the loader
   // skips them. Pull them out with loadEnv and re-inject as build-time literals.
   const env = loadEnv(mode, process.cwd(), "");
-  console.log("[build] VITE_POSTHOG_* in env:", Object.keys(env).filter(k => k.startsWith("VITE_POSTHOG")));
 
   return {
     base: "/",
