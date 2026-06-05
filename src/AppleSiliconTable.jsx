@@ -372,6 +372,28 @@ export default function AppleSiliconTable() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  // "Reset" link is shown when any view state differs from defaults. Clicking
+  // it clears all state and navigates to the bare path.
+  const hasNonDefaultState = useMemo(() => {
+    if (search) return true;
+    if (sorting.length > 0) return true;
+    if (visibleCols.size !== DEFAULT_VISIBLE.length) return true;
+    for (const k of DEFAULT_VISIBLE) if (!visibleCols.has(k)) return true;
+    if (Object.keys(columnFilters).length > 0) return true;
+    return false;
+  }, [search, sorting, visibleCols, columnFilters]);
+
+  function resetToDefault() {
+    setSearch("");
+    setSorting([]);
+    setVisibleCols(new Set(DEFAULT_VISIBLE));
+    setColumnFilters({});
+    // Push the clean URL so the back button doesn't return to the filtered view.
+    if (typeof window !== "undefined") {
+      window.history.pushState(null, "", window.location.pathname);
+    }
+  }
+
   const visibleColumns = useMemo(
     () => COLUMNS.filter((c) => visibleCols.has(c.accessorKey)),
     [COLUMNS, visibleCols]
@@ -438,6 +460,15 @@ export default function AppleSiliconTable() {
         <span className="text-sm text-base-content/60">
           {filtered.length} / {chips.length} chips
         </span>
+        {hasNonDefaultState && (
+          <button
+            type="button"
+            onClick={resetToDefault}
+            className="text-sm text-base-content/60 hover:text-base-content underline underline-offset-2 cursor-pointer"
+          >
+            Reset
+          </button>
+        )}
       </div>
 
       {/* Table controls */}

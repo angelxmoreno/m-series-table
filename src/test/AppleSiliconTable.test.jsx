@@ -230,4 +230,50 @@ describe("AppleSiliconTable", () => {
       expect(window.location.search).toContain("q=Max");
     });
   });
+
+  describe("Reset link", () => {
+    it("is not shown on the default view", () => {
+      render(<AppleSiliconTable />);
+      expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
+    });
+
+    it("is shown when state is hydrated from the URL", () => {
+      window.history.replaceState(null, "", "/?q=M3");
+      render(<AppleSiliconTable />);
+      expect(screen.getByRole("button", { name: "Reset" })).toBeInTheDocument();
+    });
+
+    it("is shown after a filter is applied", async () => {
+      const user = userEvent.setup();
+      render(<AppleSiliconTable />);
+
+      await user.click(screen.getByRole("button", { name: "Filter Gen" }));
+      const dialog = await screen.findByRole("dialog", { name: /filter by gen/i });
+      await user.click(within(dialog).getByRole("checkbox", { name: "M4" }));
+      await user.click(within(dialog).getByRole("button", { name: "Done" }));
+
+      expect(screen.getByRole("button", { name: "Reset" })).toBeInTheDocument();
+    });
+
+    it("clicking Reset clears all state and navigates to /", async () => {
+      const user = userEvent.setup();
+      // Use a URL with both q and a filter so we exercise "clear everything".
+      window.history.replaceState(null, "", "/?f_tier=Max");
+      render(<AppleSiliconTable />);
+
+      // Sanity: hydrated state is reflected (M1/M2/M3/M4/M5 Max = 5 chips)
+      expect(screen.getByText(/5 \/ 18 chips/i)).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Reset" }));
+
+      // Search input cleared
+      expect(screen.getByPlaceholderText("e.g. M3 Max")).toHaveValue("");
+      // All chips visible again
+      expect(screen.getByText(/18 \/ 18 chips/i)).toBeInTheDocument();
+      // URL is back to the bare path
+      expect(window.location.search).toBe("");
+      // Reset link is gone
+      expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
+    });
+  });
 });
