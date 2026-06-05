@@ -9,6 +9,11 @@ describe("AppleSiliconTable", () => {
     expect(screen.getByText("Apple Silicon")).toBeInTheDocument();
   });
 
+  it("shows the default summary on first render", () => {
+    render(<AppleSiliconTable />);
+    expect(screen.getByText(/all 18 chips/i)).toBeInTheDocument();
+  });
+
   it("shows all chips initially", () => {
     render(<AppleSiliconTable />);
     expect(screen.getByText(/18 \/ 18 chips/i)).toBeInTheDocument();
@@ -274,6 +279,31 @@ describe("AppleSiliconTable", () => {
       expect(window.location.search).toBe("");
       // Reset link is gone
       expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Filter summary", () => {
+    it("shows the active filters in the subtitle area", async () => {
+      const user = userEvent.setup();
+      render(<AppleSiliconTable />);
+
+      await user.click(screen.getByRole("button", { name: "Filter Tier" }));
+      const dialog = await screen.findByRole("dialog", { name: /filter by tier/i });
+      await user.click(within(dialog).getByRole("checkbox", { name: "Max" }));
+      await user.click(within(dialog).getByRole("button", { name: "Done" }));
+
+      // Subtitle should now reflect the filter
+      expect(screen.getByText(/max tier/i)).toBeInTheDocument();
+    });
+
+    it("reflects URL state in the subtitle on first render", () => {
+      window.history.replaceState(null, "", "/?f_tier=Max,Ultra&f_year=2024:&sort=year:desc");
+      render(<AppleSiliconTable />);
+
+      // All three fragments should be present, joined by middots in the UI
+      expect(screen.getByText(/Max or Ultra tier/i)).toBeInTheDocument();
+      expect(screen.getByText(/year 2024 or later/i)).toBeInTheDocument();
+      expect(screen.getByText(/sorted by year ↓/i)).toBeInTheDocument();
     });
   });
 });

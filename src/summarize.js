@@ -1,0 +1,120 @@
+// Build a human-readable summary of the current view state. Used in the
+// header so a shared link (or just the current view) can be understood at
+// a glance, without parsing the URL or clicking around.
+//
+// Output is an array of "fragments" — each is a small labeled piece of the
+// summary that the caller can render in any layout. Examples:
+//
+//   summarizeState(...) → [
+//     { kind: "default", text: "All 18 chips" },
+//   ]
+//
+//   summarizeState(...) → [
+//     { kind: "filter", key: "tier", text: "Max tier" },
+//     { kind: "filter", key: "year", text: "2024 or later" },
+//     { kind: "sort",   text: "sorted by year ↓" },
+//   ]
+
+const SORT_LABELS = {
+  chip: "chip",
+  generation: "generation",
+  tier: "tier",
+  year: "year",
+  processNode: "process",
+  cpuCores: "CPU cores",
+  perfCores: "perf cores",
+  efficiencyCores: "efficiency cores",
+  gpuCores: "GPU cores",
+  neuralEngineCores: "NE cores",
+  neuralEngineTOPS: "TOPS",
+  maxUnifiedMemoryGB: "max RAM",
+  memoryBandwidthGBs: "bandwidth",
+  transistorsBillions: "transistors",
+  thunderbolt: "Thunderbolt",
+};
+
+// Look up a friendly column header. Falls back to the camelCase accessorKey
+// split into words if the column isn't registered.
+function columnLabel(col) {
+  return SORT_LABELS[col?.accessorKey] ?? col?.header ?? col?.accessorKey ?? "?";
+}
+
+function formatRange(filter, value) {
+  const [lo, hi] = value;
+  const atMin = lo === filter.min;
+  const atMax = hi === filter.max;
+  if (atMin && atMax) return null; // default
+  if (atMin) return `${formatNum(hi)} or less`;
+  if (atMax) return `${formatNum(lo)} or later`;
+  return `${formatNum(lo)}–${formatNum(hi)}`;
+}
+
+function formatNum(n) {
+  // Integers stay as integers; floats keep one decimal place.
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+export function summarizeState({ q, sorting, visibleCols, columnFilters }, columns, defaultVisible, totalCount) {
+  const fragments = [];
+  let hasAny = false;
+
+  // Search
+  if (q) {
+    fragments.push({ kind: "search", text: `matching "${q}"` });
+    hasAny = true;
+  }
+
+  // Column filters
+  for (const col of columns) {
+    const f = columnFilters[col.accessorKey];
+    if (f === undefined) continue;
+    const label = columnLabel(col);
+
+    if (col.filter.type === "set" && f.size > 0) {
+      // Use the column's canonical value order for stability.
+      const values = col.filter.values.filter((v) => f.has(v));
+      const text = values.length === 1
+        ? `${values[0]} ${label}`
+        : `${values.join(" or ")} ${label}`;
+      fragments.push({ kind: "filter", key: col.accessorKey, text });
+      hasAny = true;
+    } else if (col.filter.type === "range") {
+      const text = formatRange(col.filter, f);
+      if (text) {
+        fragments.push({ kind: "filter", key: col.accessorKey, text: `${label} ${text}` });
+        hasAny = true;
+      }
+    }
+  }
+
+  // Visible columns that differ from default
+  const sameAsDefault = visibleCols.size === defaultVisible.length &&
+    defaultVisible.every((k) => visibleCols.has(k));
+  if (!sameAsDefault) {
+    const extra = columns
+      .map((c) => c.accessorKey)
+      .filter((k) => visibleCols.has(k) && !defaultVisible.includes(k));
+    if (extra.length > 0) {
+      const labels = extra.map((k) => columnLabel(columns.find((c) => c.accessorKey === k)));
+      fragments.push({ kind: "cols", text: `+${labels.length} more` });
+      hasAny = true;
+    }
+  }
+
+  // Sort
+  if (sorting.length > 0) {
+    const s = sorting[0];
+    const col = columns.find((c) => c.accessorKey === s.id);
+    fragments.push({
+      kind: "sort",
+      text: `sorted by ${columnLabel(col)} ${s.desc ? "↓" : "↑"}`,
+    });
+    hasAny = true;
+  }
+
+  if (!hasAny) {
+    return [{ kind: "default", text: totalCount != null ? `All ${totalCount} chips` : "All chips" }];
+  }
+
+  return fragments;
+}

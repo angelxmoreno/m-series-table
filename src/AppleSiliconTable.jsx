@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-table";
 import chips from "./chips.json";
 import { parseState, writeState, readState, statesEqual } from "./urlState.js";
+import { summarizeState } from "./summarize.js";
 
 const fmt = (v, s = "") =>
   v === null || v === undefined ? "—" : `${v}${s}`;
@@ -439,6 +440,19 @@ export default function AppleSiliconTable() {
 
   const activeFilterCol = activeFilterKey ? COLUMNS.find((c) => c.accessorKey === activeFilterKey) : null;
 
+  // Human-readable summary of the current view state (what the filters,
+  // search, sort, and visible columns are doing). Replaces the static
+  // subtitle so a shared link is understandable at a glance.
+  const summary = useMemo(
+    () => summarizeState(
+      { q: search, sorting, visibleCols, columnFilters },
+      COLUMNS,
+      DEFAULT_VISIBLE,
+      chips.length
+    ),
+    [search, sorting, visibleCols, columnFilters]
+  );
+
   function toggleColumn(key) {
     setVisibleCols((prev) => {
       const next = new Set(prev);
@@ -453,8 +467,13 @@ export default function AppleSiliconTable() {
       <div className="flex items-end justify-between mb-6 border-b border-base-300 pb-5">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Apple Silicon</h1>
-          <p className="text-sm text-base-content/60 uppercase tracking-widest mt-1">
-            M-Series · M1 through M5 Max
+          <p className="text-sm text-base-content/60 mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            {summary.map((frag, i) => (
+              <span key={i} className="flex items-center gap-1.5">
+                {i > 0 && <span className="text-base-content/30">·</span>}
+                <span>{frag.text}</span>
+              </span>
+            ))}
           </p>
         </div>
         <span className="text-sm text-base-content/60">
