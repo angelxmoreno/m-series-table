@@ -29,8 +29,8 @@ const COLUMN_DEFS = [
   { accessorKey: "gpuCores", header: "GPU Cores", description: "Number of GPU cores. More cores = more graphics and parallel compute throughput.", filter: { type: "range" }, cell: (i) => fmt(i.getValue()) },
   { accessorKey: "neuralEngineCores", header: "NE Cores", description: "Number of cores in the Neural Engine, Apple's ML accelerator.", cell: (i) => fmt(i.getValue()) },
   { accessorKey: "neuralEngineTOPS", header: "TOPS", description: "Neural Engine throughput in tera-operations per second. Higher = faster on-device ML.", filter: { type: "range" }, cell: (i) => fmt(i.getValue()) },
-  { accessorKey: "maxUnifiedMemoryGB", header: "Max RAM", description: "Maximum configurable unified memory, shared between CPU, GPU, and Neural Engine.", cell: (i) => fmt(i.getValue(), " GB") },
-  { accessorKey: "memoryBandwidthGBs", header: "Bandwidth", description: "Peak unified memory bandwidth in GB/s. Higher bandwidth reduces memory-bound bottlenecks.", cell: (i) => fmt(i.getValue(), " GB/s") },
+  { accessorKey: "maxUnifiedMemoryGB", header: "Max RAM", description: "Maximum configurable unified memory, shared between CPU, GPU, and Neural Engine.", filter: { type: "range" }, cell: (i) => fmt(i.getValue(), " GB") },
+  { accessorKey: "memoryBandwidthGBs", header: "Bandwidth", description: "Peak unified memory bandwidth in GB/s. Higher bandwidth reduces memory-bound bottlenecks.", filter: { type: "range" }, cell: (i) => fmt(i.getValue(), " GB/s") },
   { accessorKey: "transistorsBillions", header: "Transistors", description: "Total transistor count in billions. A rough proxy for die complexity and capability.", cell: (i) => fmt(i.getValue(), "B") },
   { accessorKey: "thunderbolt", header: "TB", description: "Thunderbolt generation supported. TB4 = 40 Gb/s, TB5 = 80 Gb/s.", filter: { type: "set" } },
 ];

@@ -41,6 +41,12 @@ describe("AppleSiliconTable", () => {
     expect(within(table).queryByText("Process")).not.toBeInTheDocument();
   });
 
+  it("exposes range filter buttons for Max RAM and Bandwidth", () => {
+    render(<AppleSiliconTable />);
+    expect(screen.getByRole("button", { name: "Filter Max RAM" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Filter Bandwidth" })).toBeInTheDocument();
+  });
+
   it("filters by generation via the column dialog", async () => {
     const user = userEvent.setup();
     render(<AppleSiliconTable />);
