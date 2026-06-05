@@ -29,8 +29,8 @@ const COLUMN_DEFS = [
   { accessorKey: "gpuCores", header: "GPU Cores", description: "Number of GPU cores. More cores = more graphics and parallel compute throughput.", filter: { type: "range" }, cell: (i) => fmt(i.getValue()) },
   { accessorKey: "neuralEngineCores", header: "NE Cores", description: "Number of cores in the Neural Engine, Apple's ML accelerator.", cell: (i) => fmt(i.getValue()) },
   { accessorKey: "neuralEngineTOPS", header: "TOPS", description: "Neural Engine throughput in tera-operations per second. Higher = faster on-device ML.", filter: { type: "range" }, cell: (i) => fmt(i.getValue()) },
-  { accessorKey: "maxUnifiedMemoryGB", header: "Max RAM", description: "Maximum configurable unified memory, shared between CPU, GPU, and Neural Engine.", filter: { type: "range" }, cell: (i) => fmt(i.getValue(), " GB") },
-  { accessorKey: "memoryBandwidthGBs", header: "Bandwidth", description: "Peak unified memory bandwidth in GB/s. Higher bandwidth reduces memory-bound bottlenecks.", filter: { type: "range" }, cell: (i) => fmt(i.getValue(), " GB/s") },
+  { accessorKey: "maxUnifiedMemoryGB", header: "Max RAM", description: "Maximum configurable unified memory, shared between CPU, GPU, and Neural Engine.", filter: { type: "range-discrete" }, cell: (i) => fmt(i.getValue(), " GB") },
+  { accessorKey: "memoryBandwidthGBs", header: "Bandwidth", description: "Peak unified memory bandwidth in GB/s. Higher bandwidth reduces memory-bound bottlenecks.", filter: { type: "range-discrete" }, cell: (i) => fmt(i.getValue(), " GB/s") },
   { accessorKey: "transistorsBillions", header: "Transistors", description: "Total transistor count in billions. A rough proxy for die complexity and capability.", cell: (i) => fmt(i.getValue(), "B") },
   { accessorKey: "thunderbolt", header: "TB", description: "Thunderbolt generation supported. TB4 = 40 Gb/s, TB5 = 80 Gb/s.", filter: { type: "set" } },
 ];
@@ -66,9 +66,15 @@ const COLUMNS = COLUMN_DEFS.map((c) => {
     ).sort();
     return { ...c, filter: { type: "set", values } };
   }
-  if (c.filter.type === "range") {
+  if (c.filter.type === "range" || c.filter.type === "range-discrete") {
     const nums = chips.map((chip) => chip[c.accessorKey]).filter((v) => typeof v === "number");
-    return { ...c, filter: { type: "range", min: Math.min(...nums), max: Math.max(...nums) } };
+    const min = Math.min(...nums);
+    const max = Math.max(...nums);
+    if (c.filter.type === "range-discrete") {
+      const values = Array.from(new Set(nums)).sort((a, b) => a - b);
+      return { ...c, filter: { type: "range-discrete", values, min, max } };
+    }
+    return { ...c, filter: { type: "range", min, max } };
   }
   return c;
 });
@@ -107,28 +113,47 @@ function downloadCSV(data) {
 function defaultFilterValue(col) {
   if (!col.filter) return undefined;
   if (col.filter.type === "set") return new Set();
-  if (col.filter.type === "range") return [col.filter.min, col.filter.max];
+  if (col.filter.type === "range" || col.filter.type === "range-discrete") {
+    return [col.filter.min, col.filter.max];
+  }
 }
 
 function isFilterActive(col, value) {
   if (!col.filter || value === undefined) return false;
   if (col.filter.type === "set") return value.size > 0;
-  if (col.filter.type === "range") return value[0] !== col.filter.min || value[1] !== col.filter.max;
+  if (col.filter.type === "range" || col.filter.type === "range-discrete") {
+    return value[0] !== col.filter.min || value[1] !== col.filter.max;
+  }
   return false;
 }
 
 function FilterDialog({ col, value, onChange, onClose }) {
   const dialogRef = useRef(null);
   const posthog = usePostHog();
+  const isRange = col.filter.type === "range";
+  const isDiscrete = col.filter.type === "range-discrete";
   const [working, setWorking] = useState(
     col.filter.type === "set" ? (value ?? defaultFilterValue(col)) : null
   );
   // String mirrors of the range inputs so the user can leave them empty while typing.
   const [minStr, setMinStr] = useState(
-    col.filter.type === "range" ? String((value ?? defaultFilterValue(col))[0]) : ""
+    isRange ? String((value ?? defaultFilterValue(col))[0]) : ""
   );
   const [maxStr, setMaxStr] = useState(
-    col.filter.type === "range" ? String((value ?? defaultFilterValue(col))[1]) : ""
+    isRange ? String((value ?? defaultFilterValue(col))[1]) : ""
+  );
+  // For range-discrete, the bound is either "" (no bound = data min/max) or a
+  // stringified entry from col.filter.values. String lets the "Any" option
+  // round-trip cleanly through the <select>.
+  const [minDiscrete, setMinDiscrete] = useState(
+    isDiscrete
+      ? ((value ?? defaultFilterValue(col))[0] === col.filter.min ? "" : String((value ?? defaultFilterValue(col))[0]))
+      : ""
+  );
+  const [maxDiscrete, setMaxDiscrete] = useState(
+    isDiscrete
+      ? ((value ?? defaultFilterValue(col))[1] === col.filter.max ? "" : String((value ?? defaultFilterValue(col))[1]))
+      : ""
   );
 
   useEffect(() => {
@@ -160,6 +185,13 @@ function FilterDialog({ col, value, onChange, onClose }) {
     const min = minStr === "" ? col.filter.min : Number(minStr);
     const max = maxStr === "" ? col.filter.max : Number(maxStr);
     if (Number.isNaN(min) || Number.isNaN(max)) return;
+    commit([min, max]);
+  }
+
+  function commitDiscrete() {
+    const min = minDiscrete === "" ? col.filter.min : Number(minDiscrete);
+    const max = maxDiscrete === "" ? col.filter.max : Number(maxDiscrete);
+    if (Number.isNaN(min) || Number.isNaN(max) || min > max) return;
     commit([min, max]);
   }
 
@@ -207,7 +239,7 @@ function FilterDialog({ col, value, onChange, onClose }) {
               );
             })}
           </div>
-        ) : (
+        ) : isRange ? (
           <>
             <div className="flex gap-3 mb-1">
               <div className="flex-1">
@@ -240,6 +272,44 @@ function FilterDialog({ col, value, onChange, onClose }) {
               data range: {col.filter.min}–{col.filter.max}
             </div>
           </>
+        ) : (
+          <>
+            <div className="flex gap-3 mb-1">
+              <div className="flex-1">
+                <label htmlFor="filter-min" className="block text-xs uppercase tracking-widest text-base-content/60 mb-1">
+                  Min
+                </label>
+                <select
+                  id="filter-min"
+                  autoFocus
+                  value={minDiscrete}
+                  onChange={(e) => setMinDiscrete(e.target.value)}
+                  className="select select-bordered select-sm w-full font-mono"
+                >
+                  <option value="">Any</option>
+                  {col.filter.values.map((v) => (
+                    <option key={v} value={String(v)}>{v}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1">
+                <label htmlFor="filter-max" className="block text-xs uppercase tracking-widest text-base-content/60 mb-1">
+                  Max
+                </label>
+                <select
+                  id="filter-max"
+                  value={maxDiscrete}
+                  onChange={(e) => setMaxDiscrete(e.target.value)}
+                  className="select select-bordered select-sm w-full font-mono"
+                >
+                  <option value="">Any</option>
+                  {col.filter.values.map((v) => (
+                    <option key={v} value={String(v)}>{v}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </>
         )}
 
         <div className="modal-action mt-2">
@@ -248,7 +318,7 @@ function FilterDialog({ col, value, onChange, onClose }) {
           </button>
           <button
             type="button"
-            onClick={col.filter.type === "range" ? commitRange : () => commit(working)}
+            onClick={isRange ? commitRange : isDiscrete ? commitDiscrete : () => commit(working)}
             className="btn btn-sm btn-success"
           >
             Done
@@ -410,7 +480,7 @@ export default function AppleSiliconTable() {
         if (f === undefined) continue;
         if (col.filter?.type === "set") {
           if (f.size > 0 && !f.has(c[col.accessorKey])) return false;
-        } else if (col.filter?.type === "range") {
+        } else if (col.filter?.type === "range" || col.filter?.type === "range-discrete") {
           const v = c[col.accessorKey];
           if (v === null || v === undefined) return false;
           if (v < f[0] || v > f[1]) return false;

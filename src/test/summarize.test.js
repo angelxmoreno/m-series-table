@@ -10,6 +10,7 @@ const COLUMNS = [
   { accessorKey: "thunderbolt", header: "TB", filter: { type: "set", values: ["TB3", "TB4", "TB5"] } },
   { accessorKey: "processNode", header: "Process" },
   { accessorKey: "gpuCores", header: "GPU Cores", filter: { type: "range", min: 8, max: 80 } },
+  { accessorKey: "maxRAM", header: "Max RAM", filter: { type: "range-discrete", values: [16, 32, 64, 128, 192], min: 16, max: 192 } },
 ];
 
 const DEFAULT_VISIBLE = ["chip", "generation", "tier", "year"];
@@ -278,5 +279,34 @@ describe("buildTitle — count is optional", () => {
       DEFAULT_VISIBLE
     );
     expect(title).toBe("Apple Silicon · M-Series Comparison · Max");
+  });
+});
+
+describe("summarizeState — range-discrete filters", () => {
+  it("includes a discrete range as 'X or later'", () => {
+    const out = summarizeState(
+      stateOf({ columnFilters: { maxRAM: [64, 192] } }),
+      COLUMNS,
+      DEFAULT_VISIBLE
+    );
+    expect(out).toContainEqual({ kind: "filter", key: "maxRAM", text: "Max RAM 64 or later" });
+  });
+
+  it("includes a discrete range as 'X or less'", () => {
+    const out = summarizeState(
+      stateOf({ columnFilters: { maxRAM: [16, 64] } }),
+      COLUMNS,
+      DEFAULT_VISIBLE
+    );
+    expect(out).toContainEqual({ kind: "filter", key: "maxRAM", text: "Max RAM 64 or less" });
+  });
+
+  it("includes a fully-bounded discrete range", () => {
+    const out = summarizeState(
+      stateOf({ columnFilters: { maxRAM: [32, 128] } }),
+      COLUMNS,
+      DEFAULT_VISIBLE
+    );
+    expect(out).toContainEqual({ kind: "filter", key: "maxRAM", text: "Max RAM 32–128" });
   });
 });

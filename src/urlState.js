@@ -8,9 +8,12 @@
 //   sort    — "<col>:<asc|desc>" (single sort, matches current code)
 //   cols    — comma-joined accessorKeys; omitted when equals defaultVisible
 //   f_<key> — per-column filter:
-//              set   → "v1,v2,..."
-//              range → "<min>:<max>" with empty bound for unbounded
-//                      e.g. "2024:" = year ≥ 2024, ":2026" = year ≤ 2026
+//              set            → "v1,v2,..."
+//              range          → "<min>:<max>" with empty bound for unbounded
+//                               e.g. "2024:" = year ≥ 2024, ":2026" = year ≤ 2026
+//              range-discrete → same as range, but the bound must be one of
+//                               the column's discrete values. Out-of-set
+//                               values are clamped to the nearest allowed one.
 
 function sameSet(a, b) {
   if (a.size !== b.size) return false;
@@ -91,16 +94,31 @@ export function parseState(searchString, columns, defaultVisible) {
       if (parsed.length > 0) {
         result.columnFilters[accessorKey] = new Set(parsed);
       }
-    } else if (col.filter.type === "range") {
+    } else if (col.filter.type === "range" || col.filter.type === "range-discrete") {
       const [minStr, maxStr] = value.split(":");
-      // Empty bound = unbounded on that side. Clamp to data range when present.
-      const min = minStr === "" || minStr === undefined
-        ? col.filter.min
-        : Number(minStr);
-      const max = maxStr === "" || maxStr === undefined
-        ? col.filter.max
-        : Number(maxStr);
-      if (Number.isFinite(min) && Number.isFinite(max) && min <= max) {
+      // Empty bound = unbounded on that side. For range-discrete, snap the
+      // user-supplied value to the nearest allowed value (could be the same
+      // thing if they picked one of the dropdown options).
+      const allowed = col.filter.type === "range-discrete"
+        ? new Set(col.filter.values)
+        : null;
+      const clamp = (raw, fallback) => {
+        if (raw === "" || raw === undefined) return fallback;
+        const n = Number(raw);
+        if (!Number.isFinite(n)) return null;
+        if (!allowed) return n;
+        // Find the closest allowed value (smallest absolute diff).
+        let best = fallback;
+        let bestDiff = Infinity;
+        for (const v of col.filter.values) {
+          const d = Math.abs(v - n);
+          if (d < bestDiff) { bestDiff = d; best = v; }
+        }
+        return best;
+      };
+      const min = clamp(minStr, col.filter.min);
+      const max = clamp(maxStr, col.filter.max);
+      if (min != null && max != null && min <= max) {
         result.columnFilters[accessorKey] = [
           Math.max(col.filter.min, min),
           Math.min(col.filter.max, max),
@@ -142,7 +160,7 @@ export function serializeState({ q, sorting, visibleCols, columnFilters }, colum
         const ordered = col.filter.values.filter((v) => f.has(v));
         params.set(`f_${col.accessorKey}`, ordered.join(","));
       }
-    } else if (col.filter.type === "range") {
+    } else if (col.filter.type === "range" || col.filter.type === "range-discrete") {
       const [lo, hi] = f;
       const atMin = lo === col.filter.min;
       const atMax = hi === col.filter.max;

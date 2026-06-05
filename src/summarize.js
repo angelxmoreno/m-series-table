@@ -78,7 +78,7 @@ export function summarizeState({ q, sorting, visibleCols, columnFilters }, colum
         : `${values.join(" or ")} ${label}`;
       fragments.push({ kind: "filter", key: col.accessorKey, text });
       hasAny = true;
-    } else if (col.filter.type === "range") {
+    } else if (col.filter.type === "range" || col.filter.type === "range-discrete") {
       const text = formatRange(col.filter, f);
       if (text) {
         fragments.push({ kind: "filter", key: col.accessorKey, text: `${label} ${text}` });
@@ -137,7 +137,7 @@ export function buildTitle({ q, sorting, visibleCols, columnFilters }, columns, 
     if (col.filter.type === "set" && f.size > 0) {
       const values = col.filter.values.filter((v) => f.has(v));
       pieces.push(values.join(", "));
-    } else if (col.filter.type === "range") {
+    } else if (col.filter.type === "range" || col.filter.type === "range-discrete") {
       const text = formatRange(col.filter, f);
       if (text) pieces.push(text);
     }

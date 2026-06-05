@@ -323,3 +323,85 @@ describe("statesEqual", () => {
     expect(statesEqual(a, b)).toBe(true);
   });
 });
+
+describe("parseState — range-discrete filters", () => {
+  const DISCRETE_COLUMNS = [
+    ...COLUMNS,
+    { accessorKey: "maxRAM", header: "Max RAM", filter: { type: "range-discrete", values: [16, 24, 32, 64, 96, 128, 192], min: 16, max: 192 } },
+  ];
+
+  it("reads a fully-bounded range", () => {
+    const s = parseState("?f_maxRAM=32:128", DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    expect(s.columnFilters.maxRAM).toEqual([32, 128]);
+  });
+
+  it("reads a lower-unbounded range", () => {
+    const s = parseState("?f_maxRAM=64:", DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    expect(s.columnFilters.maxRAM).toEqual([64, 192]);
+  });
+
+  it("reads an upper-unbounded range", () => {
+    const s = parseState("?f_maxRAM=:64", DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    expect(s.columnFilters.maxRAM).toEqual([16, 64]);
+  });
+
+  it("snaps an out-of-set value to the nearest allowed value", () => {
+    // 50 is not in {16, 24, 32, 64, 96, 128, 192}; closest is 64 (diff 14) vs 32 (diff 18).
+    const s = parseState("?f_maxRAM=50:128", DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    expect(s.columnFilters.maxRAM).toEqual([64, 128]);
+  });
+
+  it("ignores an inverted range even after snapping", () => {
+    // 200 snaps to 192, 8 snaps to 16 → snapped min (192) > snapped max (16),
+    // so the filter is dropped rather than silently applied backwards.
+    const s = parseState("?f_maxRAM=200:8", DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    expect(s.columnFilters.maxRAM).toBeUndefined();
+  });
+});
+
+describe("serializeState — range-discrete filters", () => {
+  const DISCRETE_COLUMNS = [
+    ...COLUMNS,
+    { accessorKey: "maxRAM", header: "Max RAM", filter: { type: "range-discrete", values: [16, 24, 32, 64, 96, 128, 192], min: 16, max: 192 } },
+  ];
+
+  it("emits a fully-bounded range", () => {
+    const s = parseState("", DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    s.columnFilters.maxRAM = [32, 128];
+    const params = serializeState(s, DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    expect(params.get("f_maxRAM")).toBe("32:128");
+  });
+
+  it("emits a lower-unbounded range", () => {
+    const s = parseState("", DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    s.columnFilters.maxRAM = [16, 128]; // at data min
+    const params = serializeState(s, DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    expect(params.get("f_maxRAM")).toBe(":128");
+  });
+
+  it("omits the filter when at the data bounds", () => {
+    const s = parseState("", DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    s.columnFilters.maxRAM = [16, 192];
+    const params = serializeState(s, DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    expect(params.has("f_maxRAM")).toBe(false);
+  });
+});
+
+describe("round-trip — range-discrete", () => {
+  const DISCRETE_COLUMNS = [
+    ...COLUMNS,
+    { accessorKey: "maxRAM", header: "Max RAM", filter: { type: "range-discrete", values: [16, 24, 32, 64, 96, 128, 192], min: 16, max: 192 } },
+  ];
+
+  it("state → URL → state preserves a discrete range", () => {
+    const original = {
+      q: "",
+      sorting: [],
+      visibleCols: new Set(DEFAULT_VISIBLE),
+      columnFilters: { maxRAM: [64, 128] },
+    };
+    const params = serializeState(original, DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    const round = parseState(`?${params.toString()}`, DISCRETE_COLUMNS, DEFAULT_VISIBLE);
+    expect(round.columnFilters.maxRAM).toEqual([64, 128]);
+  });
+});

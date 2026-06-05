@@ -47,6 +47,68 @@ describe("AppleSiliconTable", () => {
     expect(screen.getByRole("button", { name: "Filter Bandwidth" })).toBeInTheDocument();
   });
 
+  it("renders Max RAM and Bandwidth filters as dropdowns of actual values", async () => {
+    const user = userEvent.setup();
+    render(<AppleSiliconTable />);
+
+    // Max RAM: dropdown should contain every unique RAM size plus "Any"
+    await user.click(screen.getByRole("button", { name: "Filter Max RAM" }));
+    const ramDialog = await screen.findByRole("dialog", { name: /filter by max ram/i });
+    const ramMin = within(ramDialog).getByLabelText("Min");
+    const ramMax = within(ramDialog).getByLabelText("Max");
+    const ramMinOptions = Array.from(ramMin.options).map((o) => o.value);
+    const ramMaxOptions = Array.from(ramMax.options).map((o) => o.value);
+    expect(ramMinOptions[0]).toBe(""); // "Any" option
+    expect(ramMinOptions.slice(1)).toEqual(["16", "24", "32", "36", "64", "96", "128", "192", "512"]);
+    expect(ramMaxOptions[0]).toBe("");
+    expect(ramMaxOptions.slice(1)).toEqual(["16", "24", "32", "36", "64", "96", "128", "192", "512"]);
+
+    // Switch to Bandwidth: dialog header changes, options reflect bandwidth values
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Filter Bandwidth" }));
+    const bwDialog = await screen.findByRole("dialog", { name: /filter by bandwidth/i });
+    const bwMin = within(bwDialog).getByLabelText("Min");
+    const bwMinOptions = Array.from(bwMin.options).map((o) => o.value);
+    expect(bwMinOptions[0]).toBe("");
+    expect(bwMinOptions.slice(1)).toEqual(["68", "100", "120", "150", "153", "200", "273", "307", "400", "546", "614", "800"]);
+  });
+
+  it("filters by a discrete Max RAM range via the dropdowns", async () => {
+    const user = userEvent.setup();
+    render(<AppleSiliconTable />);
+
+    await user.click(screen.getByRole("button", { name: "Filter Max RAM" }));
+    const dialog = await screen.findByRole("dialog", { name: /filter by max ram/i });
+    await user.selectOptions(within(dialog).getByLabelText("Min"), "64");
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+
+    // Chips with max RAM >= 64: 64, 96, 128, 192, 512 GB chips
+    // From the dataset that's: M1 Max(64), M2 Max(96), M3 Max(128), M4 Max(128),
+    // M5 Max(128), M2 Ultra(192), M3 Ultra(192), M4 Ultra(192), M5 Max is 128, etc.
+    // We just assert it's a non-default subset (< 18).
+    const summary = screen.getByText(/\d+ \/ 18 chips/i).textContent;
+    const matched = parseInt(summary, 10);
+    expect(matched).toBeGreaterThan(0);
+    expect(matched).toBeLessThan(18);
+  });
+
+  it("'Any' on a discrete range side means unbounded on that side", async () => {
+    const user = userEvent.setup();
+    render(<AppleSiliconTable />);
+
+    await user.click(screen.getByRole("button", { name: "Filter Bandwidth" }));
+    const dialog = await screen.findByRole("dialog", { name: /filter by bandwidth/i });
+    // Leave Min at "Any" (no bound), set Max to 150
+    await user.selectOptions(within(dialog).getByLabelText("Max"), "150");
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+
+    // Should filter to bandwidth <= 150 GB/s, not the full 18 chips
+    const summary = screen.getByText(/\d+ \/ 18 chips/i).textContent;
+    const matched = parseInt(summary, 10);
+    expect(matched).toBeGreaterThan(0);
+    expect(matched).toBeLessThan(18);
+  });
+
   it("filters by generation via the column dialog", async () => {
     const user = userEvent.setup();
     render(<AppleSiliconTable />);
