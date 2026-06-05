@@ -3,29 +3,19 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig(({ mode }) => {
+  // Vite exposes `import.meta.env.VITE_*` for env vars it has loaded, but we
+  // want the PostHog values guaranteed to reach the bundle even if the loader
+  // skips them. Pull them out with loadEnv and re-inject as build-time literals.
   const env = loadEnv(mode, process.cwd(), "");
 
   return {
     base: "/",
     plugins: [react(), tailwindcss()],
-    server: {
-      proxy: {
-        "/ingest/static": {
-          target: "https://us-assets.i.posthog.com",
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/ingest/, ""),
-        },
-        "/ingest/array": {
-          target: "https://us-assets.i.posthog.com",
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/ingest/, ""),
-        },
-        "/ingest": {
-          target: env.VITE_POSTHOG_HOST || "https://us.i.posthog.com",
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/ingest/, ""),
-        },
-      },
+    define: {
+      "import.meta.env.VITE_POSTHOG_PROJECT_TOKEN": JSON.stringify(
+        env.VITE_POSTHOG_PROJECT_TOKEN
+      ),
+      "import.meta.env.VITE_POSTHOG_HOST": JSON.stringify(env.VITE_POSTHOG_HOST),
     },
     test: {
       environment: "jsdom",
