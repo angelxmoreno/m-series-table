@@ -9,11 +9,10 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
   // [debug] show what loadEnv sees at build time
-  console.log("[build] env.VITE_POSTHOG_PROJECT_TOKEN =", env.VITE_POSTHOG_PROJECT_TOKEN);
-  console.log("[build] env.VITE_POSTHOG_HOST =", env.VITE_POSTHOG_HOST);
-  console.log("[build] process.env.VITE_POSTHOG_PROJECT_TOKEN truthy?", !!process.env.VITE_POSTHOG_PROJECT_TOKEN);
-  console.log("[build] process.env.VITE_POSTHOG_HOST truthy?", !!process.env.VITE_POSTHOG_HOST);
-  console.log("[build] count of VITE_POSTHOG_* in process.env:", Object.keys(process.env).filter(k => k.startsWith("VITE_POSTHOG")).length);
+  console.log("[build] VITE_POSTHOG keys in process.env:", Object.keys(process.env).filter(k => k.startsWith("VITE_POSTHOG")));
+  console.log("[build] ANTHROPIC_API_KEY in process.env?", !!process.env.ANTHROPIC_API_KEY);
+  console.log("[build] GITHUB_ACTIONS in process.env?", !!process.env.GITHUB_ACTIONS);
+  console.log("[build] any GH_* in process.env:", Object.keys(process.env).filter(k => k.startsWith("GH") || k.startsWith("GITHUB")).length);
 
   return {
     base: "/",
