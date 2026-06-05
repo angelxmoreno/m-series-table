@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-table";
 import chips from "./chips.json";
 import { parseState, writeState, readState, statesEqual } from "./urlState.js";
-import { summarizeState } from "./summarize.js";
+import { summarizeState, buildTitle } from "./summarize.js";
 
 const fmt = (v, s = "") =>
   v === null || v === undefined ? "—" : `${v}${s}`;
@@ -452,6 +452,18 @@ export default function AppleSiliconTable() {
     ),
     [search, sorting, visibleCols, columnFilters]
   );
+
+  // Browser-tab title mirrors the summary in a compact form. Kept under
+  // ~60 chars so it doesn't get truncated by the tab strip.
+  useEffect(() => {
+    document.title = buildTitle(
+      { q: search, sorting, visibleCols, columnFilters },
+      COLUMNS,
+      DEFAULT_VISIBLE,
+      chips.length,
+      filtered.length
+    );
+  }, [search, sorting, visibleCols, columnFilters, filtered.length]);
 
   function toggleColumn(key) {
     setVisibleCols((prev) => {

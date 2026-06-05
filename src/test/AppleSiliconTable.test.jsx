@@ -306,4 +306,42 @@ describe("AppleSiliconTable", () => {
       expect(screen.getByText(/sorted by year ↓/i)).toBeInTheDocument();
     });
   });
+
+  describe("Document title", () => {
+    it("uses the base title on first render with no state", () => {
+      render(<AppleSiliconTable />);
+      expect(document.title).toBe("Apple Silicon · M-Series Comparison");
+    });
+
+    it("updates the title when a filter is applied", async () => {
+      const user = userEvent.setup();
+      render(<AppleSiliconTable />);
+
+      await user.click(screen.getByRole("button", { name: "Filter Tier" }));
+      const dialog = await screen.findByRole("dialog", { name: /filter by tier/i });
+      await user.click(within(dialog).getByRole("checkbox", { name: "Max" }));
+      await user.click(within(dialog).getByRole("button", { name: "Done" }));
+
+      expect(document.title).toContain("Max");
+      expect(document.title).toContain("5/18");
+    });
+
+    it("hydrates the title from URL state on first render", () => {
+      window.history.replaceState(null, "", "/?f_tier=Max&f_year=2024:");
+      render(<AppleSiliconTable />);
+
+      expect(document.title).toContain("Max");
+      expect(document.title).toContain("2024 or later");
+    });
+
+    it("resets the base title when Reset is clicked", async () => {
+      const user = userEvent.setup();
+      window.history.replaceState(null, "", "/?f_tier=Max");
+      render(<AppleSiliconTable />);
+      expect(document.title).not.toBe("Apple Silicon · M-Series Comparison");
+
+      await user.click(screen.getByRole("button", { name: "Reset" }));
+      expect(document.title).toBe("Apple Silicon · M-Series Comparison");
+    });
+  });
 });

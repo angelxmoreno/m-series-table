@@ -118,3 +118,50 @@ export function summarizeState({ q, sorting, visibleCols, columnFilters }, colum
 
   return fragments;
 }
+
+// Build a short browser-tab title. Stays under ~60 chars by being
+// selective: search is highest signal, then the first active filter, then
+// the count. Sort and extra visible columns are omitted — they bloat the
+// title without telling the user anything at a glance.
+const BASE_TITLE = "Apple Silicon · M-Series Comparison";
+
+export function buildTitle({ q, sorting, visibleCols, columnFilters }, columns, defaultVisible, totalCount, matchedCount) {
+  const pieces = [];
+
+  if (q) pieces.push(q);
+
+  for (const col of columns) {
+    const f = columnFilters[col.accessorKey];
+    if (f === undefined) continue;
+
+    if (col.filter.type === "set" && f.size > 0) {
+      const values = col.filter.values.filter((v) => f.has(v));
+      pieces.push(values.join(", "));
+    } else if (col.filter.type === "range") {
+      const text = formatRange(col.filter, f);
+      if (text) pieces.push(text);
+    }
+    if (pieces.length >= 2) break; // at most 2 filter pieces
+  }
+
+  if (pieces.length === 0) {
+    return BASE_TITLE;
+  }
+
+  const tail = totalCount != null ? ` (${matchedCount ?? "?"}/${totalCount})` : "";
+  let title = `${BASE_TITLE} · ${pieces.join(" · ")}${tail}`;
+
+  // Hard cap at 80 chars for browser-tab sanity. Truncate the pieces
+  // (never the base title or the count) and add an ellipsis if we cut.
+  if (title.length > 80) {
+    const head = BASE_TITLE;
+    const room = 80 - head.length - tail.length - 3; // 3 = " · "
+    const joined = pieces.join(" · ");
+    const truncated = joined.length > room
+      ? joined.slice(0, Math.max(0, room - 1)) + "…"
+      : joined;
+    title = `${head} · ${truncated}${tail}`;
+  }
+
+  return title;
+}
