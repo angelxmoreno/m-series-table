@@ -8,6 +8,11 @@ export default defineConfig(({ mode }) => {
   // skips them. Pull them out with loadEnv and re-inject as build-time literals.
   const env = loadEnv(mode, process.cwd(), "");
 
+  // [debug] show what loadEnv sees at build time
+  console.log("[build] VITE_POSTHOG_PROJECT_TOKEN =", env.VITE_POSTHOG_PROJECT_TOKEN);
+  console.log("[build] VITE_POSTHOG_HOST =", env.VITE_POSTHOG_HOST);
+  console.log("[build] process.env.VITE_POSTHOG_PROJECT_TOKEN =", process.env.VITE_POSTHOG_PROJECT_TOKEN);
+
   return {
     base: "/",
     plugins: [react(), tailwindcss()],
