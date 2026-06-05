@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom/vitest";
+import { afterEach } from "vitest";
 
 // jsdom doesn't implement <dialog>. Polyfill showModal/close so the filter
 // and columns dialogs work in tests. Esc-to-close is handled explicitly in
@@ -20,3 +21,13 @@ if (typeof window !== "undefined" && typeof window.HTMLDialogElement !== "undefi
     };
   }
 }
+
+// Reset the URL between tests. Components read window.location.search as the
+// source of truth on first render, so leftover query strings from a previous
+// test would leak into the next. We rewrite the URL to "/" so each test starts
+// with the default state.
+afterEach(() => {
+  if (typeof window !== "undefined") {
+    window.history.replaceState(null, "", "/");
+  }
+});

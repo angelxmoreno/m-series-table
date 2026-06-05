@@ -183,4 +183,51 @@ describe("AppleSiliconTable", () => {
     // Table still renders, no chip rows
     expect(screen.getByRole("table")).toBeInTheDocument();
   });
+
+  describe("URL state hydration", () => {
+    it("hydrates the search input from ?q=", () => {
+      window.history.replaceState(null, "", "/?q=M3");
+      render(<AppleSiliconTable />);
+
+      const searchInput = screen.getByPlaceholderText("e.g. M3 Max");
+      expect(searchInput).toHaveValue("M3");
+
+      // M3, M3 Pro, M3 Max, M3 Ultra = 4 chips
+      expect(screen.getByText(/4 \/ 18 chips/i)).toBeInTheDocument();
+    });
+
+    it("hydrates a range filter from ?f_year=2024:2026 without opening the dialog", () => {
+      window.history.replaceState(null, "", "/?f_year=2024:2026");
+      render(<AppleSiliconTable />);
+
+      // year in [2024, 2026]: M4(3) + M5(3) + M3 Ultra(2025) = 7 chips
+      expect(screen.getByText(/7 \/ 18 chips/i)).toBeInTheDocument();
+
+      // No dialog should be open
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("updates window.location.search when a filter is applied", async () => {
+      const user = userEvent.setup();
+      render(<AppleSiliconTable />);
+
+      await user.click(screen.getByRole("button", { name: "Filter Gen" }));
+      const dialog = await screen.findByRole("dialog", { name: /filter by gen/i });
+      await user.click(within(dialog).getByRole("checkbox", { name: "M4" }));
+      await user.click(within(dialog).getByRole("button", { name: "Done" }));
+
+      expect(window.location.search).toContain("f_generation=M4");
+    });
+
+    it("updates window.location.search when the user types in search", async () => {
+      const user = userEvent.setup();
+      render(<AppleSiliconTable />);
+
+      const searchInput = screen.getByPlaceholderText("e.g. M3 Max");
+      await user.type(searchInput, "Max");
+
+      // Search uses URL encoding, so space → + but here it's a single word
+      expect(window.location.search).toContain("q=Max");
+    });
+  });
 });

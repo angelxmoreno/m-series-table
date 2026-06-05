@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { usePostHog } from "@posthog/react";
 import {
   useReactTable,
@@ -7,6 +7,7 @@ import {
   flexRender,
 } from "@tanstack/react-table";
 import chips from "./chips.json";
+import { parseState, writeState, readState, statesEqual } from "./urlState.js";
 
 const fmt = (v, s = "") =>
   v === null || v === undefined ? "—" : `${v}${s}`;
@@ -50,6 +51,24 @@ const TIER_BADGE = {
   Max: "badge-warning",
   Ultra: "badge-secondary",
 };
+
+// Augment each column with its derived filter config. Computed once at module
+// load (chips.json is a static import) so it's available before any component
+// renders — including lazy useState initializers that read the URL.
+const COLUMNS = COLUMN_DEFS.map((c) => {
+  if (!c.filter) return c;
+  if (c.filter.type === "set") {
+    const values = Array.from(
+      new Set(chips.map((chip) => chip[c.accessorKey]).filter((v) => v !== null && v !== undefined))
+    ).sort();
+    return { ...c, filter: { type: "set", values } };
+  }
+  if (c.filter.type === "range") {
+    const nums = chips.map((chip) => chip[c.accessorKey]).filter((v) => typeof v === "number");
+    return { ...c, filter: { type: "range", min: Math.min(...nums), max: Math.max(...nums) } };
+  }
+  return c;
+});
 
 // Subtle per-generation text tint (kept inline because it's data, not theme).
 const GEN_COLOR = {
@@ -293,32 +312,64 @@ function ColumnsPopover({ all, visible, onToggle, onClose }) {
 
 export default function AppleSiliconTable() {
   const posthog = usePostHog();
-  const [search, setSearch] = useState("");
-  const [sorting, setSorting] = useState([]);
+
+  // All view state is hydrated from the URL on first render. Subsequent
+  // changes flow state → URL via useEffect, and URL → state via popstate.
+  const [search, setSearch] = useState(() => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).q);
+  const [sorting, setSorting] = useState(() => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).sorting);
+  const [visibleCols, setVisibleCols] = useState(
+    () => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).visibleCols
+  );
+  const [columnFilters, setColumnFilters] = useState(
+    () => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).columnFilters
+  );
   const [hoveredCol, setHoveredCol] = useState(null);
   const [hoveredRow, setHoveredRow] = useState(null);
-
-  const [visibleCols, setVisibleCols] = useState(() => new Set(DEFAULT_VISIBLE));
-  const [columnFilters, setColumnFilters] = useState({});
   const [activeFilterKey, setActiveFilterKey] = useState(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
 
-  // Augment each column with its derived filter config.
-  const COLUMNS = useMemo(() => {
-    return COLUMN_DEFS.map((c) => {
-      if (!c.filter) return c;
-      if (c.filter.type === "set") {
-        const values = Array.from(
-          new Set(chips.map((chip) => chip[c.accessorKey]).filter((v) => v !== null && v !== undefined))
-        ).sort();
-        return { ...c, filter: { type: "set", values } };
-      }
-      if (c.filter.type === "range") {
-        const nums = chips.map((chip) => chip[c.accessorKey]).filter((v) => typeof v === "number");
-        return { ...c, filter: { type: "range", min: Math.min(...nums), max: Math.max(...nums) } };
-      }
-      return c;
-    });
+  // Mark the most recent state change so the URL-sync effect knows whether
+  // to replaceState (search) or pushState (everything else). Reset by the
+  // effect on every commit.
+  const nextWriteReplace = useRef(false);
+
+  // Mirror state → URL on every change. The setSearch wrapper below flips
+  // the ref to true for typing so the effect uses replaceState.
+  useEffect(() => {
+    // Skip the very first render — initial state came from the URL, so the
+    // URL already matches. (Calling writeState here would no-op anyway via
+    // applyToHistory's equality check, but skipping avoids a needless call.)
+    const state = { q: search, sorting, visibleCols, columnFilters };
+    const fromUrl = parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE);
+    if (statesEqual(state, fromUrl)) {
+      nextWriteReplace.current = false;
+      return;
+    }
+    writeState(state, COLUMNS, DEFAULT_VISIBLE, { replace: nextWriteReplace.current });
+    nextWriteReplace.current = false;
+  }, [search, sorting, visibleCols, columnFilters]);
+
+  // Wrap setSearch so the URL-sync effect uses replaceState (typing is
+  // continuous, no need for a history entry per keystroke). Other setters
+  // default to pushState.
+  const setSearchReplace = useCallback((v) => {
+    nextWriteReplace.current = true;
+    setSearch(v);
+  }, []);
+
+  // Listen for browser back/forward — re-read state from URL. React's
+  // setters are stable identities, and the handler reads `next` from the
+  // URL at pop time, so the effect can run once on mount.
+  useEffect(() => {
+    function onPopState() {
+      const next = readState(COLUMNS, DEFAULT_VISIBLE);
+      setSearch(next.q);
+      setSorting(next.sorting);
+      setVisibleCols(next.visibleCols);
+      setColumnFilters(next.columnFilters);
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   const visibleColumns = useMemo(
@@ -397,7 +448,7 @@ export default function AppleSiliconTable() {
           placeholder="e.g. M3 Max"
           value={search}
           onChange={(e) => {
-            setSearch(e.target.value);
+            setSearchReplace(e.target.value);
             if (e.target.value) {
               posthog?.capture("chip_searched", { query: e.target.value });
             }
@@ -458,7 +509,7 @@ export default function AppleSiliconTable() {
                       {hoveredCol === h.id && colDef.description && (
                         <div
                           role="tooltip"
-                          className="absolute top-full left-0 z-20 mt-1.5 max-w-xs min-w-44 px-3 py-2 bg-base-200 border border-base-300 rounded text-sm normal-case tracking-normal font-normal leading-snug shadow-lg pointer-events-none"
+                          className="absolute bottom-full left-0 z-20 mb-1.5 max-w-xs min-w-44 px-3 py-2 bg-base-200 border border-base-300 rounded text-sm normal-case tracking-normal font-normal leading-snug shadow-lg pointer-events-none"
                         >
                           {colDef.description}
                         </div>
