@@ -35,6 +35,7 @@ describe("AppleSiliconTable", () => {
     expect(within(table).getByText("Year")).toBeInTheDocument();
     expect(within(table).getByText("CPU Cores")).toBeInTheDocument();
     expect(within(table).getByText("GPU Cores")).toBeInTheDocument();
+    expect(within(table).getByText("Max RAM")).toBeInTheDocument();
     // Process is not in the default visible set
     expect(within(table).queryByText("Process")).not.toBeInTheDocument();
   });
@@ -180,7 +181,7 @@ describe("AppleSiliconTable", () => {
     await user.click(screen.getByRole("button", { name: /columns/i }));
     const dialog = await screen.findByRole("dialog", { name: /choose columns/i });
     // Uncheck every default-visible column
-    for (const name of ["Chip", "Gen", "Tier", "Year", "CPU Cores", "GPU Cores"]) {
+    for (const name of ["Chip", "Gen", "Tier", "Year", "CPU Cores", "GPU Cores", "Max RAM"]) {
       await user.click(within(dialog).getByRole("checkbox", { name }));
     }
     await user.keyboard("{Escape}");

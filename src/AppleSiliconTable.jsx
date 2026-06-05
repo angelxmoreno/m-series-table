@@ -43,6 +43,7 @@ const DEFAULT_VISIBLE = [
   "year",
   "cpuCores",
   "gpuCores",
+  "maxUnifiedMemoryGB",
 ];
 
 // Map tier to a daisyUI badge variant.
