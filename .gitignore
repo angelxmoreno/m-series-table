@@ -18,6 +18,10 @@ dist/
 *.swp
 *.swo
 
+# Claude Code / PostHog wizard scratch
+.claude/
+posthog-setup-report.md
+
 # OS
 .DS_Store
 Thumbs.db

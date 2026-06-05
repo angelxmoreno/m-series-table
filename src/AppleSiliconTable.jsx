@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import { usePostHog } from "@posthog/react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -96,6 +97,7 @@ function isFilterActive(col, value) {
 
 function FilterDialog({ col, value, onChange, onClose }) {
   const dialogRef = useRef(null);
+  const posthog = usePostHog();
   const [working, setWorking] = useState(
     col.filter.type === "set" ? (value ?? defaultFilterValue(col)) : null
   );
@@ -125,6 +127,10 @@ function FilterDialog({ col, value, onChange, onClose }) {
 
   function commit(next) {
     onChange(next);
+    posthog?.capture("column_filter_applied", {
+      column_key: col.accessorKey,
+      filter_type: col.filter.type,
+    });
     onClose();
   }
 
@@ -136,7 +142,9 @@ function FilterDialog({ col, value, onChange, onClose }) {
   }
 
   function clear() {
-    commit(defaultFilterValue(col));
+    onChange(defaultFilterValue(col));
+    posthog?.capture("column_filter_cleared", { column_key: col.accessorKey });
+    onClose();
   }
 
   return (
@@ -234,6 +242,7 @@ function FilterDialog({ col, value, onChange, onClose }) {
 
 function ColumnsPopover({ all, visible, onToggle, onClose }) {
   const ref = useRef(null);
+  const posthog = usePostHog();
 
   useEffect(() => {
     const dlg = ref.current;
@@ -261,7 +270,13 @@ function ColumnsPopover({ all, visible, onToggle, onClose }) {
               <input
                 type="checkbox"
                 checked={visible.has(col.accessorKey)}
-                onChange={() => onToggle(col.accessorKey)}
+                onChange={() => {
+                  posthog?.capture("column_visibility_toggled", {
+                    column_key: col.accessorKey,
+                    visible: !visible.has(col.accessorKey),
+                  });
+                  onToggle(col.accessorKey);
+                }}
                 className="checkbox checkbox-sm checkbox-success"
               />
               <span className="label-text">{col.header}</span>
@@ -277,6 +292,7 @@ function ColumnsPopover({ all, visible, onToggle, onClose }) {
 }
 
 export default function AppleSiliconTable() {
+  const posthog = usePostHog();
   const [search, setSearch] = useState("");
   const [sorting, setSorting] = useState([]);
   const [hoveredCol, setHoveredCol] = useState(null);
@@ -328,11 +344,22 @@ export default function AppleSiliconTable() {
     });
   }, [COLUMNS, search, columnFilters]);
 
+  function handleSortingChange(updater) {
+    const next = typeof updater === "function" ? updater(sorting) : updater;
+    setSorting(next);
+    if (next.length > 0) {
+      posthog?.capture("column_sorted", {
+        column_key: next[0].id,
+        sort_direction: next[0].desc ? "desc" : "asc",
+      });
+    }
+  }
+
   const table = useReactTable({
     data: filtered,
     columns: visibleColumns,
     state: { sorting },
-    onSortingChange: setSorting,
+    onSortingChange: handleSortingChange,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
@@ -369,7 +396,12 @@ export default function AppleSiliconTable() {
           className="input input-bordered input-sm w-56 font-mono"
           placeholder="e.g. M3 Max"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            if (e.target.value) {
+              posthog?.capture("chip_searched", { query: e.target.value });
+            }
+          }}
         />
         <button
           type="button"
@@ -380,7 +412,10 @@ export default function AppleSiliconTable() {
         </button>
         <button
           type="button"
-          onClick={() => downloadCSV(filtered)}
+          onClick={() => {
+            downloadCSV(filtered);
+            posthog?.capture("csv_exported", { chip_count: filtered.length });
+          }}
           className="btn btn-sm btn-success btn-outline ml-auto"
         >
           ↓ Export CSV
