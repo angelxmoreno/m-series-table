@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Lint
+        run: bun run lint
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Test
+        run: bun run test
+      - name: Build
+        env:
+          # Use placeholder values — the build only embeds these as JSON
+          # literals; it never connects to PostHog from CI.
+          VITE_POSTHOG_PROJECT_TOKEN: ci-placeholder
+          VITE_POSTHOG_HOST: https://placeholder.example
+        run: bun run build
