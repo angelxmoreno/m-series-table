@@ -15,14 +15,16 @@
 //                               the column's discrete values. Out-of-set
 //                               values are clamped to the nearest allowed one.
 
-function sameSet(a, b) {
+import type { Column, ColumnFilter, FilterValue, ViewState } from "./types";
+
+function sameSet(a: Set<string>, b: Set<string>): boolean {
   if (a.size !== b.size) return false;
   for (const v of a) if (!b.has(v)) return false;
   return true;
 }
 
 // Deep-equality for columnFilters: compare sets and tuples element-wise.
-function sameFilters(a, b) {
+function sameFilters(a: Record<string, FilterValue>, b: Record<string, FilterValue>): boolean {
   const aKeys = Object.keys(a);
   const bKeys = Object.keys(b);
   if (aKeys.length !== bKeys.length) return false;
@@ -30,6 +32,7 @@ function sameFilters(a, b) {
     if (!(k in b)) return false;
     const av = a[k];
     const bv = b[k];
+    if (!bv) return false;
     if (av instanceof Set) {
       if (!(bv instanceof Set) || !sameSet(av, bv)) return false;
     } else if (Array.isArray(av)) {
@@ -47,9 +50,9 @@ function sameFilters(a, b) {
 //
 // `defaults` provides the default visible columns. `columns` is the augmented
 // column list (with derived filter values, min/max) used to validate input.
-export function parseState(searchString, columns, defaultVisible) {
+export function parseState(searchString: string, columns: Column[], defaultVisible: string[]): ViewState {
   const params = new URLSearchParams(searchString);
-  const result = {
+  const result: ViewState = {
     q: params.get("q") ?? "",
     sorting: [],
     visibleCols: new Set(defaultVisible),
@@ -60,9 +63,11 @@ export function parseState(searchString, columns, defaultVisible) {
   const sort = params.get("sort");
   if (sort) {
     const [colId, dir] = sort.split(":");
-    const known = columns.find((c) => c.accessorKey === colId);
-    if (known && (dir === "asc" || dir === "desc")) {
-      result.sorting = [{ id: colId, desc: dir === "desc" }];
+    if (colId && (dir === "asc" || dir === "desc")) {
+      const known = columns.find((c) => c.accessorKey === colId);
+      if (known) {
+        result.sorting = [{ id: colId, desc: dir === "desc" }];
+      }
     }
   }
 
@@ -95,33 +100,32 @@ export function parseState(searchString, columns, defaultVisible) {
         result.columnFilters[accessorKey] = new Set(parsed);
       }
     } else if (col.filter.type === "range" || col.filter.type === "range-discrete") {
-      const [minStr, maxStr] = value.split(":");
+      const [minStr = "", maxStr = ""] = value.split(":");
       // Empty bound = unbounded on that side. For range-discrete, snap the
       // user-supplied value to the nearest allowed value (could be the same
       // thing if they picked one of the dropdown options).
-      const allowed = col.filter.type === "range-discrete"
-        ? new Set(col.filter.values)
-        : null;
-      const clamp = (raw, fallback) => {
+      const filter = col.filter;
+      const allowed = filter.type === "range-discrete" ? new Set(filter.values) : null;
+      const clamp = (raw: string, fallback: number): number | null => {
         if (raw === "" || raw === undefined) return fallback;
         const n = Number(raw);
         if (!Number.isFinite(n)) return null;
-        if (!allowed) return n;
+        if (!allowed || filter.type !== "range-discrete") return n;
         // Find the closest allowed value (smallest absolute diff).
-        let best = fallback;
+        let best: number = fallback;
         let bestDiff = Infinity;
-        for (const v of col.filter.values) {
+        for (const v of filter.values) {
           const d = Math.abs(v - n);
           if (d < bestDiff) { bestDiff = d; best = v; }
         }
         return best;
       };
-      const min = clamp(minStr, col.filter.min);
-      const max = clamp(maxStr, col.filter.max);
+      const min = clamp(minStr, filter.min);
+      const max = clamp(maxStr, filter.max);
       if (min != null && max != null && min <= max) {
         result.columnFilters[accessorKey] = [
-          Math.max(col.filter.min, min),
-          Math.min(col.filter.max, max),
+          Math.max(filter.min, min),
+          Math.min(filter.max, max),
         ];
       }
     }
@@ -132,13 +136,14 @@ export function parseState(searchString, columns, defaultVisible) {
 
 // Serialize view state to URLSearchParams. Omit any key whose value matches
 // the default (clean URL = default view).
-export function serializeState({ q, sorting, visibleCols, columnFilters }, columns, defaultVisible) {
+export function serializeState(state: ViewState, columns: Column[], defaultVisible: string[]): URLSearchParams {
+  const { q, sorting, visibleCols, columnFilters } = state;
   const params = new URLSearchParams();
 
   if (q) params.set("q", q);
 
   if (sorting.length > 0) {
-    const s = sorting[0];
+    const s = sorting[0]!;
     params.set("sort", `${s.id}:${s.desc ? "desc" : "asc"}`);
   }
 
@@ -154,20 +159,23 @@ export function serializeState({ q, sorting, visibleCols, columnFilters }, colum
     const f = columnFilters[col.accessorKey];
     if (f === undefined) continue;
 
-    if (col.filter.type === "set") {
+    if (col.filter?.type === "set" && f instanceof Set) {
       if (f.size > 0) {
         // Sort for stability (alphabetical for the values themselves).
         const ordered = col.filter.values.filter((v) => f.has(v));
         params.set(`f_${col.accessorKey}`, ordered.join(","));
       }
-    } else if (col.filter.type === "range" || col.filter.type === "range-discrete") {
+    } else if ((col.filter?.type === "range" || col.filter?.type === "range-discrete") && Array.isArray(f)) {
       const [lo, hi] = f;
-      const atMin = lo === col.filter.min;
-      const atMax = hi === col.filter.max;
-      if (!atMin || !atMax) {
-        const loStr = atMin ? "" : String(lo);
-        const hiStr = atMax ? "" : String(hi);
-        params.set(`f_${col.accessorKey}`, `${loStr}:${hiStr}`);
+      const filter: ColumnFilter = col.filter;
+      if (filter.type === "range" || filter.type === "range-discrete") {
+        const atMin = lo === filter.min;
+        const atMax = hi === filter.max;
+        if (!atMin || !atMax) {
+          const loStr = atMin ? "" : String(lo);
+          const hiStr = atMax ? "" : String(hi);
+          params.set(`f_${col.accessorKey}`, `${loStr}:${hiStr}`);
+        }
       }
     }
   }
@@ -177,7 +185,7 @@ export function serializeState({ q, sorting, visibleCols, columnFilters }, colum
 
 // Apply a URLSearchParams to window.history. No-op when the URL is unchanged.
 // `replace` → replaceState (typing); otherwise pushState (deliberate actions).
-export function applyToHistory(params, { replace = false } = {}) {
+export function applyToHistory(params: URLSearchParams, { replace = false }: { replace?: boolean } = {}): void {
   if (typeof window === "undefined") return;
   const next = `?${params.toString()}`;
   const current = window.location.search;
@@ -192,25 +200,32 @@ export function applyToHistory(params, { replace = false } = {}) {
 }
 
 // Convenience: serialize + apply in one call.
-export function writeState(state, columns, defaultVisible, { replace = false } = {}) {
+export function writeState(
+  state: ViewState,
+  columns: Column[],
+  defaultVisible: string[],
+  { replace = false }: { replace?: boolean } = {}
+): void {
   const params = serializeState(state, columns, defaultVisible);
   applyToHistory(params, { replace });
 }
 
 // Re-read state from the current URL. Used by the popstate handler.
-export function readState(columns, defaultVisible) {
+export function readState(columns: Column[], defaultVisible: string[]): ViewState {
   return parseState(window.location.search, columns, defaultVisible);
 }
 
 // Equivalence check between current state and a freshly-read state, used by
 // popstate to decide whether to update React state. Two states are equivalent
 // when their user-facing outputs are identical.
-export function statesEqual(a, b) {
+export function statesEqual(a: ViewState, b: ViewState): boolean {
   if (a.q !== b.q) return false;
   if (a.sorting.length !== b.sorting.length) return false;
   for (let i = 0; i < a.sorting.length; i++) {
-    if (a.sorting[i].id !== b.sorting[i].id) return false;
-    if (a.sorting[i].desc !== b.sorting[i].desc) return false;
+    const sa = a.sorting[i]!;
+    const sb = b.sorting[i]!;
+    if (sa.id !== sb.id) return false;
+    if (sa.desc !== sb.desc) return false;
   }
   if (!sameSet(a.visibleCols, b.visibleCols)) return false;
   if (!sameFilters(a.columnFilters, b.columnFilters)) return false;

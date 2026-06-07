@@ -6,18 +6,27 @@ import {
   getSortedRowModel,
   flexRender,
 } from "@tanstack/react-table";
-import chips from "./chips.json";
-import { parseState, writeState, readState, statesEqual } from "./urlState.js";
-import { summarizeState, buildTitle } from "./summarize.js";
+import chipsJson from "./chips.json";
+import { parseState, writeState, readState, statesEqual } from "./urlState";
+import { summarizeState, buildTitle } from "./summarize";
+import { fmt } from "./fmt";
+import type {
+  Chip,
+  Column,
+  ColumnDef,
+  ColumnFilter,
+  FilterValue,
+  SortItem,
+  ViewState,
+} from "./types";
 
-const fmt = (v, s = "") =>
-  v === null || v === undefined ? "—" : `${v}${s}`;
+const chips = chipsJson as Chip[];
 
 // Per-column metadata. `filter` is derived per column below from the data:
 //   - omitted         -> no filter (chip, processNode, etc.)
 //   - { type: "set" } -> checkbox list of unique values
 //   - { type: "range" }-> min/max number inputs, bounded by data min/max
-const COLUMN_DEFS = [
+const COLUMN_DEFS: ColumnDef[] = [
   { accessorKey: "chip", header: "Chip", description: "Official Apple marketing name of the chip (e.g. M3 Pro, M4 Max)." },
   { accessorKey: "generation", header: "Gen", description: "Apple silicon generation: M1, M2, M3, M4, or M5.", filter: { type: "set" } },
   { accessorKey: "tier", header: "Tier", description: "Performance tier within a generation: Base, Pro, Max, or Ultra.", filter: { type: "set" } },
@@ -36,7 +45,7 @@ const COLUMN_DEFS = [
 ];
 
 // Default visible subset. The rest are available in the Columns popover.
-const DEFAULT_VISIBLE = [
+const DEFAULT_VISIBLE: Array<Column["accessorKey"]> = [
   "chip",
   "generation",
   "tier",
@@ -48,7 +57,7 @@ const DEFAULT_VISIBLE = [
 ];
 
 // Map tier to a daisyUI badge variant.
-const TIER_BADGE = {
+const TIER_BADGE: Record<Chip["tier"], string> = {
   Base: "badge-success",
   Pro: "badge-info",
   Max: "badge-warning",
@@ -58,16 +67,17 @@ const TIER_BADGE = {
 // Augment each column with its derived filter config. Computed once at module
 // load (chips.json is a static import) so it's available before any component
 // renders — including lazy useState initializers that read the URL.
-const COLUMNS = COLUMN_DEFS.map((c) => {
-  if (!c.filter) return c;
+const COLUMNS: Column[] = COLUMN_DEFS.map((c): Column => {
+  if (!c.filter) return c as Column;
+  const key = c.accessorKey as keyof Chip;
   if (c.filter.type === "set") {
     const values = Array.from(
-      new Set(chips.map((chip) => chip[c.accessorKey]).filter((v) => v !== null && v !== undefined))
-    ).sort();
+      new Set(chips.map((chip) => chip[key]).filter((v) => v !== null && v !== undefined))
+    ).sort() as string[];
     return { ...c, filter: { type: "set", values } };
   }
   if (c.filter.type === "range" || c.filter.type === "range-discrete") {
-    const nums = chips.map((chip) => chip[c.accessorKey]).filter((v) => typeof v === "number");
+    const nums = chips.map((chip) => chip[key]).filter((v) => typeof v === "number") as number[];
     const min = Math.min(...nums);
     const max = Math.max(...nums);
     if (c.filter.type === "range-discrete") {
@@ -76,26 +86,26 @@ const COLUMNS = COLUMN_DEFS.map((c) => {
     }
     return { ...c, filter: { type: "range", min, max } };
   }
-  return c;
+  return c as Column;
 });
 
 // Subtle per-generation text tint (kept inline because it's data, not theme).
-const GEN_COLOR = {
+const GEN_COLOR: Record<Chip["generation"], string> = {
   M1: "#999", M2: "#bbb", M3: "#5fc8ff", M4: "#5fffb0", M5: "#ff5fff",
 };
-const TB_COLOR = {
+const TB_COLOR: Record<Chip["thunderbolt"], string> = {
   TB3: "#aaa",
   TB4: "#5fc8ff",
   TB5: "#ff9f5f",
 };
 
-function downloadCSV(data) {
-  const keys = Object.keys(data[0]);
+function downloadCSV(data: Chip[]): void {
+  const keys = Object.keys(data[0] as Chip);
   const csv = [
     keys.join(","),
     ...data.map((row) =>
       keys.map((k) => {
-        const v = row[k];
+        const v = row[k as keyof Chip];
         if (v === null || v === undefined) return "N/A";
         const s = String(v);
         return s.includes(",") ? `"${s}"` : s;
@@ -110,49 +120,51 @@ function downloadCSV(data) {
 }
 
 // Default per-column filter state (means "no filter applied").
-function defaultFilterValue(col) {
+function defaultFilterValue(col: Column): FilterValue | undefined {
   if (!col.filter) return undefined;
-  if (col.filter.type === "set") return new Set();
+  if (col.filter.type === "set") return new Set<string>();
   if (col.filter.type === "range" || col.filter.type === "range-discrete") {
     return [col.filter.min, col.filter.max];
   }
+  return undefined;
 }
 
-function isFilterActive(col, value) {
+function isFilterActive(col: Column, value: FilterValue | undefined): boolean {
   if (!col.filter || value === undefined) return false;
-  if (col.filter.type === "set") return value.size > 0;
-  if (col.filter.type === "range" || col.filter.type === "range-discrete") {
+  if (col.filter.type === "set" && value instanceof Set) return value.size > 0;
+  if ((col.filter.type === "range" || col.filter.type === "range-discrete") && Array.isArray(value)) {
     return value[0] !== col.filter.min || value[1] !== col.filter.max;
   }
   return false;
 }
 
-function FilterDialog({ col, value, onChange, onClose }) {
-  const dialogRef = useRef(null);
+function FilterDialog({ col, value, onChange, onClose }: { col: Column; value: FilterValue | undefined; onChange: (next: FilterValue | undefined) => void; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
   const posthog = usePostHog();
-  const isRange = col.filter.type === "range";
-  const isDiscrete = col.filter.type === "range-discrete";
-  const [working, setWorking] = useState(
-    col.filter.type === "set" ? (value ?? defaultFilterValue(col)) : null
+  const filter: ColumnFilter | undefined = col.filter;
+  const isRange = filter?.type === "range";
+  const isDiscrete = filter?.type === "range-discrete";
+  const [working, setWorking] = useState<Set<string> | null>(
+    filter?.type === "set" ? (value instanceof Set ? value : (defaultFilterValue(col) as Set<string>) ?? new Set<string>()) : null
   );
   // String mirrors of the range inputs so the user can leave them empty while typing.
-  const [minStr, setMinStr] = useState(
-    isRange ? String((value ?? defaultFilterValue(col))[0]) : ""
+  const [minStr, setMinStr] = useState<string>(
+    isRange ? String((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[0]) : ""
   );
-  const [maxStr, setMaxStr] = useState(
-    isRange ? String((value ?? defaultFilterValue(col))[1]) : ""
+  const [maxStr, setMaxStr] = useState<string>(
+    isRange ? String((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[1]) : ""
   );
   // For range-discrete, the bound is either "" (no bound = data min/max) or a
   // stringified entry from col.filter.values. String lets the "Any" option
   // round-trip cleanly through the <select>.
-  const [minDiscrete, setMinDiscrete] = useState(
-    isDiscrete
-      ? ((value ?? defaultFilterValue(col))[0] === col.filter.min ? "" : String((value ?? defaultFilterValue(col))[0]))
+  const [minDiscrete, setMinDiscrete] = useState<string>(
+    isDiscrete && filter
+      ? ((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[0] === filter.min ? "" : String((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[0]))
       : ""
   );
-  const [maxDiscrete, setMaxDiscrete] = useState(
-    isDiscrete
-      ? ((value ?? defaultFilterValue(col))[1] === col.filter.max ? "" : String((value ?? defaultFilterValue(col))[1]))
+  const [maxDiscrete, setMaxDiscrete] = useState<string>(
+    isDiscrete && filter
+      ? ((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[1] === filter.max ? "" : String((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[1]))
       : ""
   );
 
@@ -164,7 +176,7 @@ function FilterDialog({ col, value, onChange, onClose }) {
     dlg.addEventListener("close", handleClose);
     // jsdom doesn't fire a cancel event on Esc; real browsers do. Belt and
     // suspenders: also call close() explicitly on Esc, idempotent in either env.
-    const handleKey = (e) => { if (e.key === "Escape" && dlg.open) dlg.close(); };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape" && dlg.open) dlg.close(); };
     document.addEventListener("keydown", handleKey);
     return () => {
       dlg.removeEventListener("close", handleClose);
@@ -172,25 +184,34 @@ function FilterDialog({ col, value, onChange, onClose }) {
     };
   }, [onClose]);
 
-  function commit(next) {
+  // After all hooks, the early return is safe. (Hooks must be called in the
+  // same order every render — but a return on a stable prop value is fine.)
+  if (!filter) return null;
+  // Narrow `filter` to non-undefined for the closures below. Captured at this
+  // point so the inner functions don't need the `?.` chain.
+  const f: ColumnFilter = filter;
+
+  function commit(next: FilterValue | undefined) {
     onChange(next);
     posthog?.capture("column_filter_applied", {
       column_key: col.accessorKey,
-      filter_type: col.filter.type,
+      filter_type: f.type,
     });
     onClose();
   }
 
   function commitRange() {
-    const min = minStr === "" ? col.filter.min : Number(minStr);
-    const max = maxStr === "" ? col.filter.max : Number(maxStr);
+    if (f.type !== "range") return;
+    const min = minStr === "" ? f.min : Number(minStr);
+    const max = maxStr === "" ? f.max : Number(maxStr);
     if (Number.isNaN(min) || Number.isNaN(max)) return;
     commit([min, max]);
   }
 
   function commitDiscrete() {
-    const min = minDiscrete === "" ? col.filter.min : Number(minDiscrete);
-    const max = maxDiscrete === "" ? col.filter.max : Number(maxDiscrete);
+    if (f.type !== "range-discrete") return;
+    const min = minDiscrete === "" ? f.min : Number(minDiscrete);
+    const max = maxDiscrete === "" ? f.max : Number(maxDiscrete);
     if (Number.isNaN(min) || Number.isNaN(max) || min > max) return;
     commit([min, max]);
   }
@@ -218,9 +239,9 @@ function FilterDialog({ col, value, onChange, onClose }) {
           </button>
         </div>
 
-        {col.filter.type === "set" ? (
+        {filter.type === "set" && working ? (
           <div className="flex flex-col gap-2 mb-4">
-            {col.filter.values.map((v) => {
+            {filter.values.map((v) => {
               const checked = working.has(v);
               return (
                 <label key={v} className="label cursor-pointer gap-3 justify-start py-1">
@@ -269,7 +290,7 @@ function FilterDialog({ col, value, onChange, onClose }) {
               </div>
             </div>
             <div className="text-xs text-base-content/50 mb-3">
-              data range: {col.filter.min}–{col.filter.max}
+              data range: {filter.min}–{filter.max}
             </div>
           </>
         ) : (
@@ -287,7 +308,7 @@ function FilterDialog({ col, value, onChange, onClose }) {
                   className="select select-bordered select-sm w-full font-mono"
                 >
                   <option value="">Any</option>
-                  {col.filter.values.map((v) => (
+                  {filter.type === "range-discrete" && filter.values.map((v) => (
                     <option key={v} value={String(v)}>{v}</option>
                   ))}
                 </select>
@@ -303,7 +324,7 @@ function FilterDialog({ col, value, onChange, onClose }) {
                   className="select select-bordered select-sm w-full font-mono"
                 >
                   <option value="">Any</option>
-                  {col.filter.values.map((v) => (
+                  {filter.type === "range-discrete" && filter.values.map((v) => (
                     <option key={v} value={String(v)}>{v}</option>
                   ))}
                 </select>
@@ -318,7 +339,7 @@ function FilterDialog({ col, value, onChange, onClose }) {
           </button>
           <button
             type="button"
-            onClick={isRange ? commitRange : isDiscrete ? commitDiscrete : () => commit(working)}
+            onClick={isRange ? commitRange : isDiscrete ? commitDiscrete : () => commit(working ?? undefined)}
             className="btn btn-sm btn-success"
           >
             Done
@@ -332,8 +353,8 @@ function FilterDialog({ col, value, onChange, onClose }) {
   );
 }
 
-function ColumnsPopover({ all, visible, onToggle, onClose }) {
-  const ref = useRef(null);
+function ColumnsPopover({ all, visible, onToggle, onClose }: { all: Column[]; visible: Set<string>; onToggle: (key: Column["accessorKey"]) => void; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement | null>(null);
   const posthog = usePostHog();
 
   useEffect(() => {
@@ -341,7 +362,7 @@ function ColumnsPopover({ all, visible, onToggle, onClose }) {
     if (!dlg) return;
     if (!dlg.open) dlg.showModal();
     const handleClose = () => onClose();
-    const handleKey = (e) => { if (e.key === "Escape" && dlg.open) dlg.close(); };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape" && dlg.open) dlg.close(); };
     dlg.addEventListener("close", handleClose);
     document.addEventListener("keydown", handleKey);
     return () => {
@@ -388,23 +409,23 @@ export default function AppleSiliconTable() {
 
   // All view state is hydrated from the URL on first render. Subsequent
   // changes flow state → URL via useEffect, and URL → state via popstate.
-  const [search, setSearch] = useState(() => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).q);
-  const [sorting, setSorting] = useState(() => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).sorting);
-  const [visibleCols, setVisibleCols] = useState(
+  const [search, setSearch] = useState<string>(() => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).q);
+  const [sorting, setSorting] = useState<SortItem[]>(() => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).sorting);
+  const [visibleCols, setVisibleCols] = useState<Set<string>>(
     () => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).visibleCols
   );
-  const [columnFilters, setColumnFilters] = useState(
+  const [columnFilters, setColumnFilters] = useState<Record<string, FilterValue>>(
     () => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).columnFilters
   );
-  const [hoveredCol, setHoveredCol] = useState(null);
-  const [hoveredRow, setHoveredRow] = useState(null);
-  const [activeFilterKey, setActiveFilterKey] = useState(null);
-  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [hoveredCol, setHoveredCol] = useState<string | null>(null);
+  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+  const [activeFilterKey, setActiveFilterKey] = useState<Column["accessorKey"] | null>(null);
+  const [columnsOpen, setColumnsOpen] = useState<boolean>(false);
 
   // Mark the most recent state change so the URL-sync effect knows whether
   // to replaceState (search) or pushState (everything else). Reset by the
   // effect on every commit.
-  const nextWriteReplace = useRef(false);
+  const nextWriteReplace = useRef<boolean>(false);
 
   // Mirror state → URL on every change. The setSearch wrapper below flips
   // the ref to true for typing so the effect uses replaceState.
@@ -412,7 +433,7 @@ export default function AppleSiliconTable() {
     // Skip the very first render — initial state came from the URL, so the
     // URL already matches. (Calling writeState here would no-op anyway via
     // applyToHistory's equality check, but skipping avoids a needless call.)
-    const state = { q: search, sorting, visibleCols, columnFilters };
+    const state: ViewState = { q: search, sorting, visibleCols, columnFilters };
     const fromUrl = parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE);
     if (statesEqual(state, fromUrl)) {
       nextWriteReplace.current = false;
@@ -425,7 +446,7 @@ export default function AppleSiliconTable() {
   // Wrap setSearch so the URL-sync effect uses replaceState (typing is
   // continuous, no need for a history entry per keystroke). Other setters
   // default to pushState.
-  const setSearchReplace = useCallback((v) => {
+  const setSearchReplace = useCallback((v: string) => {
     nextWriteReplace.current = true;
     setSearch(v);
   }, []);
@@ -447,7 +468,7 @@ export default function AppleSiliconTable() {
 
   // "Reset" link is shown when any view state differs from defaults. Clicking
   // it clears all state and navigates to the bare path.
-  const hasNonDefaultState = useMemo(() => {
+  const hasNonDefaultState = useMemo<boolean>(() => {
     if (search) return true;
     if (sorting.length > 0) return true;
     if (visibleCols.size !== DEFAULT_VISIBLE.length) return true;
@@ -467,50 +488,55 @@ export default function AppleSiliconTable() {
     }
   }
 
-  const visibleColumns = useMemo(
+  const visibleColumns = useMemo<Column[]>(
     () => COLUMNS.filter((c) => visibleCols.has(c.accessorKey)),
-    [COLUMNS, visibleCols]
+    [visibleCols]
   );
 
-  const filtered = useMemo(() => {
+  const filtered = useMemo<Chip[]>(() => {
     return chips.filter((c) => {
       if (search && !c.chip.toLowerCase().includes(search.toLowerCase())) return false;
       for (const col of COLUMNS) {
         const f = columnFilters[col.accessorKey];
         if (f === undefined) continue;
-        if (col.filter?.type === "set") {
-          if (f.size > 0 && !f.has(c[col.accessorKey])) return false;
-        } else if (col.filter?.type === "range" || col.filter?.type === "range-discrete") {
-          const v = c[col.accessorKey];
+        const key = col.accessorKey as keyof Chip;
+        if (col.filter?.type === "set" && f instanceof Set) {
+          const v = c[key];
+          if (typeof v !== "string") return false;
+          if (f.size > 0 && !f.has(v)) return false;
+        } else if ((col.filter?.type === "range" || col.filter?.type === "range-discrete") && Array.isArray(f)) {
+          const v = c[key];
           if (v === null || v === undefined) return false;
+          if (typeof v !== "number") return false;
           if (v < f[0] || v > f[1]) return false;
         }
       }
       return true;
     });
-  }, [COLUMNS, search, columnFilters]);
+  }, [search, columnFilters]);
 
-  function handleSortingChange(updater) {
+  function handleSortingChange(updater: SortItem[] | ((old: SortItem[]) => SortItem[])) {
     const next = typeof updater === "function" ? updater(sorting) : updater;
     setSorting(next);
     if (next.length > 0) {
+      const first = next[0]!;
       posthog?.capture("column_sorted", {
-        column_key: next[0].id,
-        sort_direction: next[0].desc ? "desc" : "asc",
+        column_key: first.id,
+        sort_direction: first.desc ? "desc" : "asc",
       });
     }
   }
 
-  const table = useReactTable({
+  const table = useReactTable<Chip>({
     data: filtered,
-    columns: visibleColumns,
+    columns: visibleColumns as never,
     state: { sorting },
     onSortingChange: handleSortingChange,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const activeFilterCol = activeFilterKey ? COLUMNS.find((c) => c.accessorKey === activeFilterKey) : null;
+  const activeFilterCol = activeFilterKey ? COLUMNS.find((c) => c.accessorKey === activeFilterKey) ?? null : null;
 
   // Human-readable summary of the current view state (what the filters,
   // search, sort, and visible columns are doing). Replaces the static
@@ -537,7 +563,7 @@ export default function AppleSiliconTable() {
     );
   }, [search, sorting, visibleCols, columnFilters, filtered.length]);
 
-  function toggleColumn(key) {
+  function toggleColumn(key: Column["accessorKey"]) {
     setVisibleCols((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
@@ -614,7 +640,7 @@ export default function AppleSiliconTable() {
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="bg-base-200">
                 {hg.headers.map((h) => {
-                  const colDef = h.column.columnDef;
+                  const colDef = h.column.columnDef as Column;
                   const filterActive = isFilterActive(colDef, columnFilters[colDef.accessorKey]);
                   return (
                     <th
@@ -680,14 +706,14 @@ export default function AppleSiliconTable() {
                       const val = cell.getValue();
                       let content;
                       if (col === "chip") {
-                        content = <span className="font-bold text-base-content tracking-wide">{val}</span>;
+                        content = <span className="font-bold text-base-content tracking-wide">{val as string}</span>;
                       } else if (col === "tier") {
                         const variant = TIER_BADGE[tier] ?? "badge-ghost";
-                        content = <span className={`badge badge-md ${variant} badge-soft font-semibold`}>{val}</span>;
+                        content = <span className={`badge badge-md ${variant} badge-soft font-semibold`}>{val as string}</span>;
                       } else if (col === "generation") {
-                        content = <span className="font-semibold" style={{ color: GEN_COLOR[gen] ?? undefined }}>{val}</span>;
+                        content = <span className="font-semibold" style={{ color: GEN_COLOR[gen] ?? undefined }}>{val as string}</span>;
                       } else if (col === "thunderbolt") {
-                        content = <span className="font-semibold" style={{ color: TB_COLOR[val] ?? undefined }}>{val}</span>;
+                        content = <span className="font-semibold" style={{ color: TB_COLOR[val as Chip["thunderbolt"]] ?? undefined }}>{val as string}</span>;
                       } else {
                         content = (
                           <span className={val === null || val === undefined ? "text-base-content/30" : "text-base-content/80"}>
@@ -713,7 +739,17 @@ export default function AppleSiliconTable() {
         <FilterDialog
           col={activeFilterCol}
           value={columnFilters[activeFilterCol.accessorKey]}
-          onChange={(next) => setColumnFilters((prev) => ({ ...prev, [activeFilterCol.accessorKey]: next }))}
+          onChange={(next) =>
+            setColumnFilters((prev) => {
+              const updated = { ...prev };
+              if (next === undefined) {
+                delete updated[activeFilterCol.accessorKey];
+              } else {
+                updated[activeFilterCol.accessorKey] = next;
+              }
+              return updated;
+            })
+          }
           onClose={() => setActiveFilterKey(null)}
         />
       )}

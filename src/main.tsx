@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import AppleSiliconTable from "./AppleSiliconTable.jsx";
+import AppleSiliconTable from "./AppleSiliconTable";
 import posthog from "posthog-js";
 import { PostHogProvider } from "@posthog/react";
 
@@ -10,7 +10,10 @@ posthog.init(import.meta.env.VITE_POSTHOG_PROJECT_TOKEN, {
   defaults: "2026-01-30",
 });
 
-createRoot(document.getElementById("root")).render(
+const rootEl = document.getElementById("root");
+if (!rootEl) throw new Error("#root element not found in index.html");
+
+createRoot(rootEl).render(
   <StrictMode>
     <PostHogProvider client={posthog}>
       <AppleSiliconTable />

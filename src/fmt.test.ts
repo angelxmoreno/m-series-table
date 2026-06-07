@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-
-// Re-implement fmt to test its logic directly (it's not exported from the component)
-const fmt = (v, s = "") =>
-  v === null || v === undefined ? "—" : `${v}${s}`;
+import { fmt } from "./fmt";
 
 describe("fmt helper", () => {
   it("returns — for null", () => {

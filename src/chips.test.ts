@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import chips from "./chips.json";
+import chipsJson from "./chips.json";
+import type { Chip } from "./types";
+
+const chips = chipsJson as Chip[];
 
 describe("chips.json", () => {
   it("has entries for every M-series generation", () => {
@@ -48,8 +51,9 @@ describe("chips.json", () => {
     ];
     for (const c of chips) {
       for (const key of numericFields) {
-        if (c[key] !== null && c[key] !== undefined) {
-          expect(c[key]).toSatisfy((v) => typeof v === "number" && v >= 0, `${key} should be non-negative`);
+        const value = (c as unknown as Record<string, unknown>)[key];
+        if (value !== null && value !== undefined) {
+          expect(value).toSatisfy((v) => typeof v === "number" && v >= 0, `${key} should be non-negative`);
         }
       }
     }

@@ -15,7 +15,9 @@
 //     { kind: "sort",   text: "sorted by year ↓" },
 //   ]
 
-const SORT_LABELS = {
+import type { Column, FilterValue, Fragment, ViewState } from "./types";
+
+const SORT_LABELS: Record<string, string> = {
   chip: "chip",
   generation: "generation",
   tier: "tier",
@@ -35,11 +37,12 @@ const SORT_LABELS = {
 
 // Look up a friendly column header. Falls back to the camelCase accessorKey
 // split into words if the column isn't registered.
-function columnLabel(col) {
-  return SORT_LABELS[col?.accessorKey] ?? col?.header ?? col?.accessorKey ?? "?";
+function columnLabel(col: Column | undefined): string {
+  return SORT_LABELS[col?.accessorKey as string] ?? col?.header ?? (col?.accessorKey as string) ?? "?";
 }
 
-function formatRange(filter, value) {
+function formatRange(filter: { min: number; max: number }, value: FilterValue): string | null {
+  if (!Array.isArray(value)) return null;
   const [lo, hi] = value;
   const atMin = lo === filter.min;
   const atMax = hi === filter.max;
@@ -49,13 +52,19 @@ function formatRange(filter, value) {
   return `${formatNum(lo)}–${formatNum(hi)}`;
 }
 
-function formatNum(n) {
+function formatNum(n: number): string {
   // Integers stay as integers; floats keep one decimal place.
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-export function summarizeState({ q, sorting, visibleCols, columnFilters }, columns, defaultVisible, totalCount) {
-  const fragments = [];
+export function summarizeState(
+  state: Pick<ViewState, "q" | "sorting" | "visibleCols" | "columnFilters">,
+  columns: Column[],
+  defaultVisible: string[],
+  totalCount?: number
+): Fragment[] {
+  const { q, sorting, visibleCols, columnFilters } = state;
+  const fragments: Fragment[] = [];
   let hasAny = false;
 
   // Search
@@ -70,7 +79,7 @@ export function summarizeState({ q, sorting, visibleCols, columnFilters }, colum
     if (f === undefined) continue;
     const label = columnLabel(col);
 
-    if (col.filter.type === "set" && f.size > 0) {
+    if (col.filter?.type === "set" && f instanceof Set) {
       // Use the column's canonical value order for stability.
       const values = col.filter.values.filter((v) => f.has(v));
       const text = values.length === 1
@@ -78,7 +87,7 @@ export function summarizeState({ q, sorting, visibleCols, columnFilters }, colum
         : `${values.join(" or ")} ${label}`;
       fragments.push({ kind: "filter", key: col.accessorKey, text });
       hasAny = true;
-    } else if (col.filter.type === "range" || col.filter.type === "range-discrete") {
+    } else if (col.filter?.type === "range" || col.filter?.type === "range-discrete") {
       const text = formatRange(col.filter, f);
       if (text) {
         fragments.push({ kind: "filter", key: col.accessorKey, text: `${label} ${text}` });
@@ -103,7 +112,7 @@ export function summarizeState({ q, sorting, visibleCols, columnFilters }, colum
 
   // Sort
   if (sorting.length > 0) {
-    const s = sorting[0];
+    const s = sorting[0]!;
     const col = columns.find((c) => c.accessorKey === s.id);
     fragments.push({
       kind: "sort",
@@ -125,8 +134,15 @@ export function summarizeState({ q, sorting, visibleCols, columnFilters }, colum
 // title without telling the user anything at a glance.
 const BASE_TITLE = "Apple Silicon · M-Series Comparison";
 
-export function buildTitle({ q, sorting, visibleCols, columnFilters }, columns, defaultVisible, totalCount, matchedCount) {
-  const pieces = [];
+export function buildTitle(
+  state: Pick<ViewState, "q" | "sorting" | "visibleCols" | "columnFilters">,
+  columns: Column[],
+  defaultVisible: string[],
+  totalCount?: number,
+  matchedCount?: number
+): string {
+  const { q, sorting, visibleCols, columnFilters } = state;
+  const pieces: string[] = [];
 
   if (q) pieces.push(q);
 
@@ -134,10 +150,10 @@ export function buildTitle({ q, sorting, visibleCols, columnFilters }, columns, 
     const f = columnFilters[col.accessorKey];
     if (f === undefined) continue;
 
-    if (col.filter.type === "set" && f.size > 0) {
+    if (col.filter?.type === "set" && f instanceof Set) {
       const values = col.filter.values.filter((v) => f.has(v));
       pieces.push(values.join(", "));
-    } else if (col.filter.type === "range" || col.filter.type === "range-discrete") {
+    } else if (col.filter?.type === "range" || col.filter?.type === "range-discrete") {
       const text = formatRange(col.filter, f);
       if (text) pieces.push(text);
     }

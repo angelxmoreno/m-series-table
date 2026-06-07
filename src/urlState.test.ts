@@ -1,14 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   parseState,
   serializeState,
   applyToHistory,
   statesEqual,
-} from "./urlState.js";
+} from "./urlState";
+import type { Column, ViewState } from "./types";
 
 // Minimal stub matching the augmented column shape AppleSiliconTable produces.
 // We test urlState in isolation — no need to load the real chips.json.
-const COLUMNS = [
+const COLUMNS: Column[] = [
   { accessorKey: "chip", header: "Chip" },
   { accessorKey: "generation", header: "Gen", filter: { type: "set", values: ["M1", "M2", "M3", "M4", "M5"] } },
   { accessorKey: "tier", header: "Tier", filter: { type: "set", values: ["Base", "Pro", "Max", "Ultra"] } },
@@ -221,7 +222,7 @@ describe("serializeState — filters", () => {
 
 describe("round-trip", () => {
   it("state → URL → state preserves everything", () => {
-    const original = {
+    const original: ViewState = {
       q: "M3 Max",
       sorting: [{ id: "year", desc: true }],
       visibleCols: new Set(["chip", "generation", "tier", "year", "thunderbolt"]),
@@ -325,7 +326,7 @@ describe("statesEqual", () => {
 });
 
 describe("parseState — range-discrete filters", () => {
-  const DISCRETE_COLUMNS = [
+  const DISCRETE_COLUMNS: Column[] = [
     ...COLUMNS,
     { accessorKey: "maxRAM", header: "Max RAM", filter: { type: "range-discrete", values: [16, 24, 32, 64, 96, 128, 192], min: 16, max: 192 } },
   ];
@@ -360,7 +361,7 @@ describe("parseState — range-discrete filters", () => {
 });
 
 describe("serializeState — range-discrete filters", () => {
-  const DISCRETE_COLUMNS = [
+  const DISCRETE_COLUMNS: Column[] = [
     ...COLUMNS,
     { accessorKey: "maxRAM", header: "Max RAM", filter: { type: "range-discrete", values: [16, 24, 32, 64, 96, 128, 192], min: 16, max: 192 } },
   ];
@@ -388,13 +389,13 @@ describe("serializeState — range-discrete filters", () => {
 });
 
 describe("round-trip — range-discrete", () => {
-  const DISCRETE_COLUMNS = [
+  const DISCRETE_COLUMNS: Column[] = [
     ...COLUMNS,
     { accessorKey: "maxRAM", header: "Max RAM", filter: { type: "range-discrete", values: [16, 24, 32, 64, 96, 128, 192], min: 16, max: 192 } },
   ];
 
   it("state → URL → state preserves a discrete range", () => {
-    const original = {
+    const original: ViewState = {
       q: "",
       sorting: [],
       visibleCols: new Set(DEFAULT_VISIBLE),

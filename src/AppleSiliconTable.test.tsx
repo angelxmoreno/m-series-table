@@ -54,8 +54,8 @@ describe("AppleSiliconTable", () => {
     // Max RAM: dropdown should contain every unique RAM size plus "Any"
     await user.click(screen.getByRole("button", { name: "Filter Max RAM" }));
     const ramDialog = await screen.findByRole("dialog", { name: /filter by max ram/i });
-    const ramMin = within(ramDialog).getByLabelText("Min");
-    const ramMax = within(ramDialog).getByLabelText("Max");
+    const ramMin = within(ramDialog).getByLabelText("Min") as unknown as HTMLSelectElement;
+    const ramMax = within(ramDialog).getByLabelText("Max") as unknown as HTMLSelectElement;
     const ramMinOptions = Array.from(ramMin.options).map((o) => o.value);
     const ramMaxOptions = Array.from(ramMax.options).map((o) => o.value);
     expect(ramMinOptions[0]).toBe(""); // "Any" option
@@ -67,7 +67,7 @@ describe("AppleSiliconTable", () => {
     await user.keyboard("{Escape}");
     await user.click(screen.getByRole("button", { name: "Filter Bandwidth" }));
     const bwDialog = await screen.findByRole("dialog", { name: /filter by bandwidth/i });
-    const bwMin = within(bwDialog).getByLabelText("Min");
+    const bwMin = within(bwDialog).getByLabelText("Min") as unknown as HTMLSelectElement;
     const bwMinOptions = Array.from(bwMin.options).map((o) => o.value);
     expect(bwMinOptions[0]).toBe("");
     expect(bwMinOptions.slice(1)).toEqual(["68", "100", "120", "150", "153", "200", "273", "307", "400", "546", "614", "800"]);

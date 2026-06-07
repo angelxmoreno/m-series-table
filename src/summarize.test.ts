@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { summarizeState, buildTitle } from "./summarize.js";
+import { summarizeState, buildTitle } from "./summarize";
+import type { Column } from "./types";
 
-const COLUMNS = [
+const COLUMNS: Column[] = [
   { accessorKey: "chip", header: "Chip" },
   { accessorKey: "generation", header: "Gen", filter: { type: "set", values: ["M1", "M2", "M3", "M4", "M5"] } },
   { accessorKey: "tier", header: "Tier", filter: { type: "set", values: ["Base", "Pro", "Max", "Ultra"] } },
@@ -15,7 +16,7 @@ const COLUMNS = [
 
 const DEFAULT_VISIBLE = ["chip", "generation", "tier", "year"];
 
-function stateOf(overrides) {
+function stateOf(overrides: Record<string, unknown>) {
   return {
     q: "",
     sorting: [],

@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
-import chips from "../chips.json";
+import chipsJson from "../chips.json";
+import type { Chip } from "../types";
 
-// Re-implement the CSV escape logic from export-csv.js
-const escape = (val) => {
+const chips = chipsJson as Chip[];
+
+// Re-implement the CSV escape logic from ../../export-csv.js
+const escape = (val: unknown): string => {
   if (val === null || val === undefined) return "N/A";
   const str = String(val);
   return str.includes(",") || str.includes('"') || str.includes("\n")
@@ -47,7 +50,7 @@ describe("CSV export logic", () => {
       "memoryBandwidthGBs", "transistorsBillions", "thunderbolt",
     ];
     const header = columns.join(",");
-    const rows = chips.map((c) => columns.map((k) => escape(c[k])).join(","));
+    const rows = chips.map((c) => columns.map((k) => escape((c as unknown as Record<string, unknown>)[k])).join(","));
     const csv = [header, ...rows].join("\n");
 
     expect(csv).toContain("chip,generation,tier");
