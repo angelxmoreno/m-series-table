@@ -1,0 +1,54 @@
+name: Bug report
+description: Report something broken in the table, the filters, the URL state, or any other part of the UI.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what_you_did
+    attributes:
+      label: What you did
+      description: Steps to reproduce. The more specific, the better.
+      placeholder: |
+        1. Open the table at https://m-series.axmdev.app
+        2. Click the ▾ button on the "Gen" column header
+        3. Check the "M4" checkbox
+        4. Click Done
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_you_expected
+    attributes:
+      label: What you expected
+      description: What you thought would happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What actually happened
+      description: What happened instead. Include any error messages from the browser console (F12 → Console).
+    validations:
+      required: true
+
+  - type: input
+    id: browser_os
+    attributes:
+      label: Browser and OS
+      placeholder: "Chrome 131 on macOS 15.1"
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: URL when the bug happened
+      description: Optional but useful — many bugs depend on filter state, which is in the URL.
+      placeholder: "https://m-series.axmdev.app/?f_generation=M4&sort=year:desc"
+
+  - type: input
+    id: screenshot
+    attributes:
+      label: Screenshot URL
+      description: Optional. Drag an image into a comment after creating the issue, or paste a link here.
