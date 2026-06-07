@@ -4,7 +4,7 @@ import {
   serializeState,
   applyToHistory,
   statesEqual,
-} from "../urlState.js";
+} from "./urlState.js";
 
 // Minimal stub matching the augmented column shape AppleSiliconTable produces.
 // We test urlState in isolation — no need to load the real chips.json.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import chips from "../chips.json";
+import chips from "./chips.json";
 
 describe("chips.json", () => {
   it("has entries for every M-series generation", () => {

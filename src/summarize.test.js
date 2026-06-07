@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { summarizeState, buildTitle } from "../summarize.js";
+import { summarizeState, buildTitle } from "./summarize.js";
 
 const COLUMNS = [
   { accessorKey: "chip", header: "Chip" },
