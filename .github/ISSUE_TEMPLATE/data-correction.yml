@@ -1,0 +1,77 @@
+name: Data correction
+description: Report a wrong or missing value in `src/chips.json` (e.g. wrong GPU core count, missing chip variant).
+title: "[Data] "
+labels: ["data-correction"]
+body:
+  - type: dropdown
+    id: chip_name
+    attributes:
+      label: Which chip?
+      description: The name of the chip as it appears in the table (the "Chip" column, e.g. "M3 Pro").
+      options:
+        - M1
+        - M1 Pro
+        - M1 Max
+        - M1 Ultra
+        - M2
+        - M2 Pro
+        - M2 Max
+        - M2 Ultra
+        - M3
+        - M3 Pro
+        - M3 Max
+        - M3 Ultra
+        - M4
+        - M4 Pro
+        - M4 Max
+        - M5
+        - M5 Pro
+        - M5 Max
+    validations:
+      required: true
+
+  - type: dropdown
+    id: field
+    attributes:
+      label: Which field is wrong or missing?
+      options:
+        - chip
+        - generation
+        - tier
+        - year
+        - processNode
+        - cpuCores
+        - perfCores
+        - efficiencyCores
+        - gpuCores
+        - neuralEngineCores
+        - neuralEngineTOPS
+        - maxUnifiedMemoryGB
+        - memoryBandwidthGBs
+        - transistorsBillions
+        - thunderbolt
+    validations:
+      required: true
+
+  - type: input
+    id: current_value
+    attributes:
+      label: Current value (in the table today)
+      placeholder: "e.g. 38"
+
+  - type: input
+    id: correct_value
+    attributes:
+      label: Correct value
+      placeholder: "e.g. 40"
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: A link to the Apple newsroom, press release, or chip-specific page that confirms the correct value. PRs without a source can't be merged.
+      placeholder: "https://www.apple.com/newsroom/..."
+    validations:
+      required: true

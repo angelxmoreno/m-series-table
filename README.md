@@ -23,15 +23,20 @@ Open `http://localhost:5173` in your browser.
 
 ```
 apple-silicon-table/
-├── index.html                  # Vite entry point
+├── CONTRIBUTING.md              # How to contribute (data + code paths)
+├── FORKING.md                   # How to run your own copy
+├── LICENSE                      # MIT
+├── README.md                    # This file
+├── CONTRIBUTOR-FRIENDLINESS.md  # Roadmap + discussion of contributor-facing changes
+├── index.html                   # Vite entry point
 ├── package.json
 ├── vite.config.js
-├── export-csv.js               # Bun CLI script to export chips.csv
+├── export-csv.js                # Bun CLI script to export chips.csv
 └── src/
-    ├── main.jsx                # React root
-    ├── index.css               # Tailwind + daisyUI imports
-    ├── AppleSiliconTable.jsx   # Main table component
-    └── chips.json              # All chip data — edit this to update the table
+    ├── main.jsx                 # React root
+    ├── index.css                # Tailwind + daisyUI imports
+    ├── AppleSiliconTable.jsx    # Main table component
+    └── chips.json               # All chip data — edit this to update the table
 ```
 
 ## Editing the Data
@@ -116,6 +121,14 @@ The custom domain is configured via `public/CNAME` (Vite copies that file to `di
 - M5 Pro/Max use a new core naming convention (Super + Performance cores) but are mapped to the same `perfCores`/`efficiencyCores` fields for consistency
 - No M4 Ultra was released — Apple skipped it
 - M5 Ultra is not yet announced
+
+## Contributing
+
+PRs welcome — start with [`CONTRIBUTING.md`](./CONTRIBUTING.md). It covers both paths: fixing a wrong data point in `src/chips.json` (most data corrections are a one-line PR with a source link) and changing something in the code (dev setup, coding style, what to put in your PR description).
+
+Want to run your own version of this site on your own domain or GitHub Pages? See [`FORKING.md`](./FORKING.md) — it covers the fork → deploy → custom-domain → PostHog-setup-for-your-fork path.
+
+Bug reports and data corrections have issue templates in `.github/ISSUE_TEMPLATE/` (they'll show up when you open a new issue on GitHub).
 
 ## License
 

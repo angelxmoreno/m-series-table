@@ -1,5 +1,8 @@
-import { describe, it, expect } from "vitest";
-import chips from "../chips.json";
+import { describe, expect, it } from "vitest";
+import chipsJson from "./chips.json";
+import type { Chip } from "./types";
+
+const chips = chipsJson as Chip[];
 
 describe("chips.json", () => {
   it("has entries for every M-series generation", () => {
@@ -13,10 +16,21 @@ describe("chips.json", () => {
 
   it("has all required fields on every entry", () => {
     const required = [
-      "chip", "generation", "tier", "year", "processNode",
-      "cpuCores", "perfCores", "efficiencyCores", "gpuCores",
-      "neuralEngineCores", "neuralEngineTOPS", "maxUnifiedMemoryGB",
-      "memoryBandwidthGBs", "transistorsBillions", "thunderbolt",
+      "chip",
+      "generation",
+      "tier",
+      "year",
+      "processNode",
+      "cpuCores",
+      "perfCores",
+      "efficiencyCores",
+      "gpuCores",
+      "neuralEngineCores",
+      "neuralEngineTOPS",
+      "maxUnifiedMemoryGB",
+      "memoryBandwidthGBs",
+      "transistorsBillions",
+      "thunderbolt",
     ];
     for (const c of chips) {
       for (const key of required) {
@@ -42,14 +56,24 @@ describe("chips.json", () => {
 
   it("has non-negative numeric values (or null) for all spec fields", () => {
     const numericFields = [
-      "cpuCores", "perfCores", "efficiencyCores", "gpuCores",
-      "neuralEngineCores", "neuralEngineTOPS", "maxUnifiedMemoryGB",
-      "memoryBandwidthGBs", "transistorsBillions",
+      "cpuCores",
+      "perfCores",
+      "efficiencyCores",
+      "gpuCores",
+      "neuralEngineCores",
+      "neuralEngineTOPS",
+      "maxUnifiedMemoryGB",
+      "memoryBandwidthGBs",
+      "transistorsBillions",
     ];
     for (const c of chips) {
       for (const key of numericFields) {
-        if (c[key] !== null && c[key] !== undefined) {
-          expect(c[key]).toSatisfy((v) => typeof v === "number" && v >= 0, `${key} should be non-negative`);
+        const value = (c as unknown as Record<string, unknown>)[key];
+        if (value !== null && value !== undefined) {
+          expect(value).toSatisfy(
+            (v) => typeof v === "number" && v >= 0,
+            `${key} should be non-negative`
+          );
         }
       }
     }

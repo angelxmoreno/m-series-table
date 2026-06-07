@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import AppleSiliconTable from "../AppleSiliconTable";
+import { describe, expect, it } from "vitest";
+import AppleSiliconTable from "./AppleSiliconTable";
 
 describe("AppleSiliconTable", () => {
   it("renders the heading", () => {
@@ -54,23 +54,56 @@ describe("AppleSiliconTable", () => {
     // Max RAM: dropdown should contain every unique RAM size plus "Any"
     await user.click(screen.getByRole("button", { name: "Filter Max RAM" }));
     const ramDialog = await screen.findByRole("dialog", { name: /filter by max ram/i });
-    const ramMin = within(ramDialog).getByLabelText("Min");
-    const ramMax = within(ramDialog).getByLabelText("Max");
+    const ramMin = within(ramDialog).getByLabelText("Min") as unknown as HTMLSelectElement;
+    const ramMax = within(ramDialog).getByLabelText("Max") as unknown as HTMLSelectElement;
     const ramMinOptions = Array.from(ramMin.options).map((o) => o.value);
     const ramMaxOptions = Array.from(ramMax.options).map((o) => o.value);
     expect(ramMinOptions[0]).toBe(""); // "Any" option
-    expect(ramMinOptions.slice(1)).toEqual(["16", "24", "32", "36", "64", "96", "128", "192", "512"]);
+    expect(ramMinOptions.slice(1)).toEqual([
+      "16",
+      "24",
+      "32",
+      "36",
+      "64",
+      "96",
+      "128",
+      "192",
+      "512",
+    ]);
     expect(ramMaxOptions[0]).toBe("");
-    expect(ramMaxOptions.slice(1)).toEqual(["16", "24", "32", "36", "64", "96", "128", "192", "512"]);
+    expect(ramMaxOptions.slice(1)).toEqual([
+      "16",
+      "24",
+      "32",
+      "36",
+      "64",
+      "96",
+      "128",
+      "192",
+      "512",
+    ]);
 
     // Switch to Bandwidth: dialog header changes, options reflect bandwidth values
     await user.keyboard("{Escape}");
     await user.click(screen.getByRole("button", { name: "Filter Bandwidth" }));
     const bwDialog = await screen.findByRole("dialog", { name: /filter by bandwidth/i });
-    const bwMin = within(bwDialog).getByLabelText("Min");
+    const bwMin = within(bwDialog).getByLabelText("Min") as unknown as HTMLSelectElement;
     const bwMinOptions = Array.from(bwMin.options).map((o) => o.value);
     expect(bwMinOptions[0]).toBe("");
-    expect(bwMinOptions.slice(1)).toEqual(["68", "100", "120", "150", "153", "200", "273", "307", "400", "546", "614", "800"]);
+    expect(bwMinOptions.slice(1)).toEqual([
+      "68",
+      "100",
+      "120",
+      "150",
+      "153",
+      "200",
+      "273",
+      "307",
+      "400",
+      "546",
+      "614",
+      "800",
+    ]);
   });
 
   it("filters by a discrete Max RAM range via the dropdowns", async () => {
@@ -250,7 +283,16 @@ describe("AppleSiliconTable", () => {
     await user.click(screen.getByRole("button", { name: /columns/i }));
     const dialog = await screen.findByRole("dialog", { name: /choose columns/i });
     // Uncheck every default-visible column
-    for (const name of ["Chip", "Gen", "Tier", "Year", "CPU Cores", "GPU Cores", "Max RAM", "Bandwidth"]) {
+    for (const name of [
+      "Chip",
+      "Gen",
+      "Tier",
+      "Year",
+      "CPU Cores",
+      "GPU Cores",
+      "Max RAM",
+      "Bandwidth",
+    ]) {
       await user.click(within(dialog).getByRole("checkbox", { name }));
     }
     await user.keyboard("{Escape}");
