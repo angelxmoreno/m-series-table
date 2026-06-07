@@ -78,22 +78,20 @@ use what everyone else uses."
 ## P0 — do this before the Reddit post
 
 ### 1. Rotate the PostHog token in `.env`
-**Why it matters:** `.env` is in the repo (it's in `.gitignore` going forward, but
-the file is committed today with `VITE_POSTHOG_PROJECT_TOKEN=phc_...`). That token
-is a secret and is now in git history. Anyone who clones the repo — including
-every Reddit contributor — has it. PostHog events from arbitrary origins can be
-spammed, and quotas / bills are tied to the project.
+**Why it matters:** `.env` is gitignored and has never been committed, so the
+token isn't in git history. The exposure surface is the local machine only —
+if the laptop is lost, stolen, or backed up somewhere you don't control, the
+token leaks. Rotating is still worth doing, but the urgency and the work
+are both smaller than this section originally implied. (This is one of two
+factual corrections after the P0 pass — see the "Corrections" section at the
+bottom of this doc.)
 
 **Action:**
 - Rotate the project token in the PostHog dashboard.
 - Update the repo's GitHub Actions secret `VITE_POSTHOG_PROJECT_TOKEN` to the new value.
-- Remove `.env` from the working tree and from git history (e.g. `git rm --cached`
-  + a one-time history rewrite with `git filter-repo`, or accept that the old
-  token will live in history and just rotate, which is what PostHog recommends
-  for leaked tokens anyway).
-- Add `.env` to `.gitignore` (already there) and confirm `git status` is clean
-  after.
 - Update the local `.env` with the new token so dev builds still work.
+- Confirm `.env` is in `.gitignore` (it already is) and `git status` is clean.
+- **No `git filter-repo` needed** — there's nothing to rewrite.
 
 ### 2. Add a `CONTRIBUTING.md`
 **Why it matters:** Reddit contributors will land in the repo and look for one
@@ -166,12 +164,24 @@ move `src/test/setup.js` to `src/test-setup.ts` (or keep it in a
 `.test.*` files as tests, so `setup.js` is safe to leave in the same
 folder either way).
 
+**Correction after execution:** this section originally listed three test
+files; the actual count is five (the four listed below plus `csv.test.js`,
+which stays in `src/test/` because it tests the CSV re-export at
+`export-csv.js` in the repo root, not anything in `src/`). `fmt.test.js`
+was a sixth before the TS port extracted `fmt` to its own file and moved
+the test with it.
+
 **Action:**
 - `git mv src/test/AppleSiliconTable.test.jsx src/AppleSiliconTable.test.jsx`
 - `git mv src/test/summarize.test.js src/summarize.test.js`
 - `git mv src/test/urlState.test.js src/urlState.test.js`
-- Move `src/test/setup.js` → `src/test-setup.ts` (and update the import
+- `git mv src/test/chips.test.js src/chips.test.js` (covers `chips.json`)
+- `git mv src/test/setup.js src/test-setup.js` (and update the import
   in `vite.config.js`).
+- `src/test/csv.test.js` stays in `src/test/` — it tests the CSV re-export
+  at `export-csv.js` (repo root), not anything in `src/`. The TS port
+  (item 8) renames it to `.ts` and the `src/test/` comment in
+  `test-setup.ts` explains why.
 - Run `bun run test` to confirm everything still picks up.
 
 ### 7. Add a standalone `FORKING.md`
@@ -200,7 +210,13 @@ section, expanded):
 
 ## P1 — first weekend after the post
 
-### 8. Port the codebase to TypeScript
+### 8. Port the codebase to TypeScript  *(done in P0 pass)*
+**Status:** Shipped — see commit `29caf2d` "feat: port codebase to TypeScript
+with strict mode". All 138 tests pass under `bun run test`, `bun run typecheck`
+is clean, and `bun run build` succeeds. The `Chip` and `Column` types live in
+`src/types.ts` and the filter map derives its discriminated union from
+`Column["filter"]` (so adding a new filter type is a compile error in
+`parseState` and `serializeState` until you handle it).
 **Why it matters:** This is the schema-safety layer. Once the project has
 more than a couple of contributors, the bug class that shows up most is
 "`accessorKey` in `chips.json` doesn't match the column-defs array" —
@@ -234,7 +250,15 @@ that "the first run of `bun install` after the port may need a
 `bunx tsc --noEmit` warmup." Almost no one will actually hit this; it's
 just a heads-up that the toolchain is slightly heavier than `vite` alone.
 
-### 9. Add a formatter + linter (Biome)
+### 9. Add a formatter + linter (Biome)  *(done in P0 pass)*
+**Status:** Shipped — see commits `c210687` "chore: add Biome for formatting
+and linting" and `134d9d3` "style: apply biome format and refine config".
+`biome.json` configures a formatter (2-space, double quotes, semicolons, ES5
+trailing commas, 100 char line width) + linter (with a few rules disabled:
+`noAutofocus` on the filter dialogs, the no-keyboard-handler rules on the
+sort header span, and `noNonNullAssertion` to avoid `!` ceremony at the
+strict-mode call sites). `bun run lint` and `bun run format` are wired up;
+both run in CI.
 **Why it matters:** With many contributors, every PR becomes a style debate.
 A formatter + linter removes the debate. Do this in the same P0 pass as
 the TS port — Biome handles `.ts` / `.tsx` files the same as `.js` / `.jsx`,
@@ -262,7 +286,13 @@ hook-usage rules — we'd add an ESLint pass on top later if a real
 maintenance burden shows up. For now, Biome + tsc + tests is the right
 floor.
 
-### 10. CI: run tests + build + typecheck + lint on PRs
+### 10. CI: run tests + build + typecheck + lint on PRs  *(done in P0 pass)*
+**Status:** Shipped — see commit `7320d25` "ci: add pull_request workflow
+running lint, typecheck, test, build". `.github/workflows/ci.yml` runs the
+same four checks (`bun run lint`, `bun run typecheck`, `bun run test`,
+`bun run build`) on every PR. PostHog env vars are stubbed in CI with
+placeholder values — the build embeds them as JSON literals, it never
+connects from CI.
 **Why it matters:** `deploy.yml` runs on push to `main` and deploys. There's
 no PR-time check that catches a broken test, type error, or lint error
 before a contributor hits merge. A red CI badge on a PR is also a strong
@@ -279,13 +309,23 @@ discourse on issues / PRs / Reddit. Mostly a signaling thing but it's the
 kind of file maintainers point to when they need to say "this is a
 technical disagreement, not a personal one."
 
-### 12. Issue labels
+### 12. Issue labels  *(done in P0 pass)*
+**Status:** Shipped. All eight default labels (`bug`, `documentation`,
+`duplicate`, `enhancement`, `good first issue`, `help wanted`, `invalid`,
+`question`, `wontfix`) were already present, and `data-correction` was
+added during the P0 pass.
 **Why it matters:** Sortable backlog. A small fixed set covers 95% of use:
 `data-correction`, `bug`, `enhancement`, `question`, `good first issue`,
 `help wanted`, `wontfix`, `duplicate`. Avoid letting the label list grow
 organically.
 
-### 13. `good first issue` grooming
+### 13. `good first issue` grooming  *(done in P0 pass)*
+**Status:** Five issues created and labeled `good first issue`:
+- #2 — Add M4 Ultra entry to `src/chips.json` (`data-correction`)
+- #3 — Add M5 Ultra entry to `src/chips.json` (`data-correction`, waiting on Apple)
+- #4 — Add `docs/SCHEMA.md` describing the chips schema (`documentation`)
+- #5 — Audit column descriptions in `src/AppleSiliconTable.tsx` (`documentation`)
+- #6 — Test the table on a mobile viewport and file UI bugs (`bug`)
 **Why it matters:** Most first-time contributors filter by this label. Curate
 3–5 small, well-scoped tasks (typo in a description, a missing column, a
 new data point for an existing chip) and label them before the post. They
@@ -357,3 +397,26 @@ If you want to do this in one sitting before posting to Reddit:
 
 Items 14–19 (CHANGELOG, Renovate, preview deploys, etc.) are not blockers
 and can wait for the first wave of contributors to land.
+
+---
+
+## Corrections to the P0 pass *(added after execution)*
+
+Two factual errors in the P0 section surfaced during execution:
+
+1. **The PostHog token was never in git history.** `.env` is gitignored and
+   was never committed. The risk in P0-1 ("anyone who clones the repo has
+   it") doesn't apply. The local-machine-only risk is real, so rotation is
+   still worth doing, but the urgency is lower than originally framed and
+   the `git filter-repo` history rewrite is not needed.
+
+2. **Five test files exist, not three.** The P0-6 list of `git mv`
+   commands missed `src/test/chips.test.js` and `src/test/csv.test.js`.
+   The four that have a clean source pair in `src/` are co-located;
+   `csv.test.js` stays in `src/test/` because it tests the CSV re-export
+   at `export-csv.js` in the repo root, not anything in `src/`. After the
+   TS port extracted `fmt` to its own file (`src/fmt.ts`), `fmt.test.js`
+   also moved out of `src/test/`.
+
+P0-8, P0-9, P0-10, P0-12, and P0-13 all shipped in the P0 pass and are
+marked *(done in P0 pass)* above.
