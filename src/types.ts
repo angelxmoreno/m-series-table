@@ -47,10 +47,7 @@ export interface ViewState {
 
 // Filter "shape" before augmentation. At that point we know the *kind* of
 // filter but not the data-derived bounds/values.
-export type ColumnFilterShape =
-  | { type: "set" }
-  | { type: "range" }
-  | { type: "range-discrete" };
+export type ColumnFilterShape = { type: "set" } | { type: "range" } | { type: "range-discrete" };
 
 // Fully-resolved filter, after the augmentation pass in AppleSiliconTable.
 export type ColumnFilter =

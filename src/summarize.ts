@@ -38,7 +38,9 @@ const SORT_LABELS: Record<string, string> = {
 // Look up a friendly column header. Falls back to the camelCase accessorKey
 // split into words if the column isn't registered.
 function columnLabel(col: Column | undefined): string {
-  return SORT_LABELS[col?.accessorKey as string] ?? col?.header ?? (col?.accessorKey as string) ?? "?";
+  return (
+    SORT_LABELS[col?.accessorKey as string] ?? col?.header ?? (col?.accessorKey as string) ?? "?"
+  );
 }
 
 function formatRange(filter: { min: number; max: number }, value: FilterValue): string | null {
@@ -82,9 +84,8 @@ export function summarizeState(
     if (col.filter?.type === "set" && f instanceof Set) {
       // Use the column's canonical value order for stability.
       const values = col.filter.values.filter((v) => f.has(v));
-      const text = values.length === 1
-        ? `${values[0]} ${label}`
-        : `${values.join(" or ")} ${label}`;
+      const text =
+        values.length === 1 ? `${values[0]} ${label}` : `${values.join(" or ")} ${label}`;
       fragments.push({ kind: "filter", key: col.accessorKey, text });
       hasAny = true;
     } else if (col.filter?.type === "range" || col.filter?.type === "range-discrete") {
@@ -97,8 +98,8 @@ export function summarizeState(
   }
 
   // Visible columns that differ from default
-  const sameAsDefault = visibleCols.size === defaultVisible.length &&
-    defaultVisible.every((k) => visibleCols.has(k));
+  const sameAsDefault =
+    visibleCols.size === defaultVisible.length && defaultVisible.every((k) => visibleCols.has(k));
   if (!sameAsDefault) {
     const extra = columns
       .map((c) => c.accessorKey)
@@ -112,17 +113,21 @@ export function summarizeState(
 
   // Sort
   if (sorting.length > 0) {
-    const s = sorting[0]!;
-    const col = columns.find((c) => c.accessorKey === s.id);
-    fragments.push({
-      kind: "sort",
-      text: `sorted by ${columnLabel(col)} ${s.desc ? "↓" : "↑"}`,
-    });
-    hasAny = true;
+    const s = sorting[0];
+    if (s) {
+      const col = columns.find((c) => c.accessorKey === s.id);
+      fragments.push({
+        kind: "sort",
+        text: `sorted by ${columnLabel(col)} ${s.desc ? "↓" : "↑"}`,
+      });
+      hasAny = true;
+    }
   }
 
   if (!hasAny) {
-    return [{ kind: "default", text: totalCount != null ? `All ${totalCount} chips` : "All chips" }];
+    return [
+      { kind: "default", text: totalCount != null ? `All ${totalCount} chips` : "All chips" },
+    ];
   }
 
   return fragments;
@@ -137,11 +142,10 @@ const BASE_TITLE = "Apple Silicon · M-Series Comparison";
 export function buildTitle(
   state: Pick<ViewState, "q" | "sorting" | "visibleCols" | "columnFilters">,
   columns: Column[],
-  defaultVisible: string[],
   totalCount?: number,
   matchedCount?: number
 ): string {
-  const { q, sorting, visibleCols, columnFilters } = state;
+  const { q, columnFilters } = state;
   const pieces: string[] = [];
 
   if (q) pieces.push(q);
@@ -173,9 +177,7 @@ export function buildTitle(
     const head = BASE_TITLE;
     const room = 80 - head.length - tail.length - 3; // 3 = " · "
     const joined = pieces.join(" · ");
-    const truncated = joined.length > room
-      ? joined.slice(0, Math.max(0, room - 1)) + "…"
-      : joined;
+    const truncated = joined.length > room ? `${joined.slice(0, Math.max(0, room - 1))}…` : joined;
     title = `${head} · ${truncated}${tail}`;
   }
 

@@ -1,17 +1,33 @@
-import { describe, it, expect } from "vitest";
-import { summarizeState, buildTitle } from "./summarize";
+import { describe, expect, it } from "vitest";
+import { buildTitle, summarizeState } from "./summarize";
 import type { Column } from "./types";
 
 const COLUMNS: Column[] = [
   { accessorKey: "chip", header: "Chip" },
-  { accessorKey: "generation", header: "Gen", filter: { type: "set", values: ["M1", "M2", "M3", "M4", "M5"] } },
-  { accessorKey: "tier", header: "Tier", filter: { type: "set", values: ["Base", "Pro", "Max", "Ultra"] } },
+  {
+    accessorKey: "generation",
+    header: "Gen",
+    filter: { type: "set", values: ["M1", "M2", "M3", "M4", "M5"] },
+  },
+  {
+    accessorKey: "tier",
+    header: "Tier",
+    filter: { type: "set", values: ["Base", "Pro", "Max", "Ultra"] },
+  },
   { accessorKey: "year", header: "Year", filter: { type: "range", min: 2020, max: 2026 } },
   { accessorKey: "cpuCores", header: "CPU Cores", filter: { type: "range", min: 8, max: 32 } },
-  { accessorKey: "thunderbolt", header: "TB", filter: { type: "set", values: ["TB3", "TB4", "TB5"] } },
+  {
+    accessorKey: "thunderbolt",
+    header: "TB",
+    filter: { type: "set", values: ["TB3", "TB4", "TB5"] },
+  },
   { accessorKey: "processNode", header: "Process" },
   { accessorKey: "gpuCores", header: "GPU Cores", filter: { type: "range", min: 8, max: 80 } },
-  { accessorKey: "maxRAM", header: "Max RAM", filter: { type: "range-discrete", values: [16, 32, 64, 128, 192], min: 16, max: 192 } },
+  {
+    accessorKey: "maxRAM",
+    header: "Max RAM",
+    filter: { type: "range-discrete", values: [16, 32, 64, 128, 192], min: 16, max: 192 },
+  },
 ];
 
 const DEFAULT_VISIBLE = ["chip", "generation", "tier", "year"];
@@ -170,7 +186,7 @@ describe("summarizeState — order", () => {
 
 describe("buildTitle — default view", () => {
   it("returns the base title when no state is set", () => {
-    const title = buildTitle(stateOf({}), COLUMNS, DEFAULT_VISIBLE, 18);
+    const title = buildTitle(stateOf({}), COLUMNS, 18);
     expect(title).toBe("Apple Silicon · M-Series Comparison");
   });
 });
@@ -180,7 +196,6 @@ describe("buildTitle — single filter", () => {
     const title = buildTitle(
       stateOf({ columnFilters: { tier: new Set(["Max"]) } }),
       COLUMNS,
-      DEFAULT_VISIBLE,
       18,
       5
     );
@@ -188,24 +203,12 @@ describe("buildTitle — single filter", () => {
   });
 
   it("appends a lower-unbounded range", () => {
-    const title = buildTitle(
-      stateOf({ columnFilters: { year: [2024, 2026] } }),
-      COLUMNS,
-      DEFAULT_VISIBLE,
-      18,
-      7
-    );
+    const title = buildTitle(stateOf({ columnFilters: { year: [2024, 2026] } }), COLUMNS, 18, 7);
     expect(title).toBe("Apple Silicon · M-Series Comparison · 2024 or later (7/18)");
   });
 
   it("appends an upper-unbounded range", () => {
-    const title = buildTitle(
-      stateOf({ columnFilters: { year: [2020, 2024] } }),
-      COLUMNS,
-      DEFAULT_VISIBLE,
-      18,
-      12
-    );
+    const title = buildTitle(stateOf({ columnFilters: { year: [2020, 2024] } }), COLUMNS, 18, 12);
     expect(title).toBe("Apple Silicon · M-Series Comparison · 2024 or less (12/18)");
   });
 });
@@ -218,7 +221,6 @@ describe("buildTitle — search + filter", () => {
         columnFilters: { tier: new Set(["Max"]) },
       }),
       COLUMNS,
-      DEFAULT_VISIBLE,
       18,
       1
     );
@@ -231,7 +233,6 @@ describe("buildTitle — multi-value set filter", () => {
     const title = buildTitle(
       stateOf({ columnFilters: { tier: new Set(["Max", "Ultra"]) } }),
       COLUMNS,
-      DEFAULT_VISIBLE,
       18,
       6
     );
@@ -247,7 +248,6 @@ describe("buildTitle — sort is omitted", () => {
         sorting: [{ id: "year", desc: true }],
       }),
       COLUMNS,
-      DEFAULT_VISIBLE,
       18,
       5
     );
@@ -260,13 +260,7 @@ describe("buildTitle — truncation", () => {
   it("truncates a long title with an ellipsis", () => {
     // Build a state with a very long search query that would blow past 80 chars.
     const longQ = "M3 Max with 38 GPU cores and 192 GB RAM";
-    const title = buildTitle(
-      stateOf({ q: longQ }),
-      COLUMNS,
-      DEFAULT_VISIBLE,
-      18,
-      1
-    );
+    const title = buildTitle(stateOf({ q: longQ }), COLUMNS, 18, 1);
     expect(title.length).toBeLessThanOrEqual(80);
     expect(title).toMatch(/…/);
   });
@@ -274,11 +268,7 @@ describe("buildTitle — truncation", () => {
 
 describe("buildTitle — count is optional", () => {
   it("omits the count when totalCount is not provided", () => {
-    const title = buildTitle(
-      stateOf({ columnFilters: { tier: new Set(["Max"]) } }),
-      COLUMNS,
-      DEFAULT_VISIBLE
-    );
+    const title = buildTitle(stateOf({ columnFilters: { tier: new Set(["Max"]) } }), COLUMNS);
     expect(title).toBe("Apple Silicon · M-Series Comparison · Max");
   });
 });

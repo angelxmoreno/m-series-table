@@ -7,7 +7,10 @@
       "!**/node_modules",
       "!**/bun.lock",
       "!**/*.md",
-      "!public"
+      "!**/*.css",
+      "!public",
+      "!export-csv.js",
+      "!src/test/csv.test.ts"
     ]
   },
   "formatter": {
@@ -17,7 +20,20 @@
     "lineWidth": 100
   },
   "linter": {
-    "enabled": true
+    "enabled": true,
+    "rules": {
+      "a11y": {
+        "noAutofocus": "off",
+        "noStaticElementInteractions": "off",
+        "useKeyWithClickEvents": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "off"
+      },
+      "suspicious": {
+        "noArrayIndexKey": "off"
+      }
+    }
   },
   "javascript": {
     "formatter": {

@@ -50,7 +50,11 @@ function sameFilters(a: Record<string, FilterValue>, b: Record<string, FilterVal
 //
 // `defaults` provides the default visible columns. `columns` is the augmented
 // column list (with derived filter values, min/max) used to validate input.
-export function parseState(searchString: string, columns: Column[], defaultVisible: string[]): ViewState {
+export function parseState(
+  searchString: string,
+  columns: Column[],
+  defaultVisible: string[]
+): ViewState {
   const params = new URLSearchParams(searchString);
   const result: ViewState = {
     q: params.get("q") ?? "",
@@ -88,7 +92,7 @@ export function parseState(searchString: string, columns: Column[], defaultVisib
     if (!key.startsWith("f_")) continue;
     const accessorKey = key.slice(2);
     const col = columns.find((c) => c.accessorKey === accessorKey);
-    if (!col || !col.filter) continue;
+    if (!col?.filter) continue;
 
     if (col.filter.type === "set") {
       const validValues = new Set(col.filter.values);
@@ -116,17 +120,17 @@ export function parseState(searchString: string, columns: Column[], defaultVisib
         let bestDiff = Infinity;
         for (const v of filter.values) {
           const d = Math.abs(v - n);
-          if (d < bestDiff) { bestDiff = d; best = v; }
+          if (d < bestDiff) {
+            bestDiff = d;
+            best = v;
+          }
         }
         return best;
       };
       const min = clamp(minStr, filter.min);
       const max = clamp(maxStr, filter.max);
       if (min != null && max != null && min <= max) {
-        result.columnFilters[accessorKey] = [
-          Math.max(filter.min, min),
-          Math.min(filter.max, max),
-        ];
+        result.columnFilters[accessorKey] = [Math.max(filter.min, min), Math.min(filter.max, max)];
       }
     }
   }
@@ -136,22 +140,24 @@ export function parseState(searchString: string, columns: Column[], defaultVisib
 
 // Serialize view state to URLSearchParams. Omit any key whose value matches
 // the default (clean URL = default view).
-export function serializeState(state: ViewState, columns: Column[], defaultVisible: string[]): URLSearchParams {
+export function serializeState(
+  state: ViewState,
+  columns: Column[],
+  defaultVisible: string[]
+): URLSearchParams {
   const { q, sorting, visibleCols, columnFilters } = state;
   const params = new URLSearchParams();
 
   if (q) params.set("q", q);
 
   if (sorting.length > 0) {
-    const s = sorting[0]!;
-    params.set("sort", `${s.id}:${s.desc ? "desc" : "asc"}`);
+    const s = sorting[0];
+    if (s) params.set("sort", `${s.id}:${s.desc ? "desc" : "asc"}`);
   }
 
   if (!sameSet(visibleCols, new Set(defaultVisible))) {
     // Preserve the canonical column order so the URL is stable.
-    const ordered = columns
-      .map((c) => c.accessorKey)
-      .filter((k) => visibleCols.has(k));
+    const ordered = columns.map((c) => c.accessorKey).filter((k) => visibleCols.has(k));
     params.set("cols", ordered.join(","));
   }
 
@@ -165,7 +171,10 @@ export function serializeState(state: ViewState, columns: Column[], defaultVisib
         const ordered = col.filter.values.filter((v) => f.has(v));
         params.set(`f_${col.accessorKey}`, ordered.join(","));
       }
-    } else if ((col.filter?.type === "range" || col.filter?.type === "range-discrete") && Array.isArray(f)) {
+    } else if (
+      (col.filter?.type === "range" || col.filter?.type === "range-discrete") &&
+      Array.isArray(f)
+    ) {
       const [lo, hi] = f;
       const filter: ColumnFilter = col.filter;
       if (filter.type === "range" || filter.type === "range-discrete") {
@@ -185,7 +194,10 @@ export function serializeState(state: ViewState, columns: Column[], defaultVisib
 
 // Apply a URLSearchParams to window.history. No-op when the URL is unchanged.
 // `replace` → replaceState (typing); otherwise pushState (deliberate actions).
-export function applyToHistory(params: URLSearchParams, { replace = false }: { replace?: boolean } = {}): void {
+export function applyToHistory(
+  params: URLSearchParams,
+  { replace = false }: { replace?: boolean } = {}
+): void {
   if (typeof window === "undefined") return;
   const next = `?${params.toString()}`;
   const current = window.location.search;
@@ -222,8 +234,9 @@ export function statesEqual(a: ViewState, b: ViewState): boolean {
   if (a.q !== b.q) return false;
   if (a.sorting.length !== b.sorting.length) return false;
   for (let i = 0; i < a.sorting.length; i++) {
-    const sa = a.sorting[i]!;
-    const sb = b.sorting[i]!;
+    const sa = a.sorting[i];
+    const sb = b.sorting[i];
+    if (!sa || !sb) return false;
     if (sa.id !== sb.id) return false;
     if (sa.desc !== sb.desc) return false;
   }

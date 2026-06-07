@@ -1,15 +1,14 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { usePostHog } from "@posthog/react";
 import {
-  useReactTable,
+  flexRender,
   getCoreRowModel,
   getSortedRowModel,
-  flexRender,
+  useReactTable,
 } from "@tanstack/react-table";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import chipsJson from "./chips.json";
-import { parseState, writeState, readState, statesEqual } from "./urlState";
-import { summarizeState, buildTitle } from "./summarize";
 import { fmt } from "./fmt";
+import { buildTitle, summarizeState } from "./summarize";
 import type {
   Chip,
   Column,
@@ -19,6 +18,7 @@ import type {
   SortItem,
   ViewState,
 } from "./types";
+import { parseState, readState, statesEqual, writeState } from "./urlState";
 
 const chips = chipsJson as Chip[];
 
@@ -27,21 +27,105 @@ const chips = chipsJson as Chip[];
 //   - { type: "set" } -> checkbox list of unique values
 //   - { type: "range" }-> min/max number inputs, bounded by data min/max
 const COLUMN_DEFS: ColumnDef[] = [
-  { accessorKey: "chip", header: "Chip", description: "Official Apple marketing name of the chip (e.g. M3 Pro, M4 Max)." },
-  { accessorKey: "generation", header: "Gen", description: "Apple silicon generation: M1, M2, M3, M4, or M5.", filter: { type: "set" } },
-  { accessorKey: "tier", header: "Tier", description: "Performance tier within a generation: Base, Pro, Max, or Ultra.", filter: { type: "set" } },
-  { accessorKey: "year", header: "Year", description: "Year the chip was announced or first shipped in a Mac.", filter: { type: "range" } },
-  { accessorKey: "processNode", header: "Process", description: "TSMC fabrication process node (e.g. 5nm, 3nm). Smaller is newer and more efficient." },
-  { accessorKey: "cpuCores", header: "CPU Cores", description: "Total CPU cores = performance cores + efficiency cores.", filter: { type: "range" }, cell: (i) => fmt(i.getValue()) },
-  { accessorKey: "perfCores", header: "Perf", description: "High-performance CPU cores used for demanding single-threaded work.", filter: { type: "range" }, cell: (i) => fmt(i.getValue()) },
-  { accessorKey: "efficiencyCores", header: "Eff", description: "High-efficiency CPU cores used for background and low-power tasks.", filter: { type: "range" }, cell: (i) => fmt(i.getValue()) },
-  { accessorKey: "gpuCores", header: "GPU Cores", description: "Number of GPU cores. More cores = more graphics and parallel compute throughput.", filter: { type: "range" }, cell: (i) => fmt(i.getValue()) },
-  { accessorKey: "neuralEngineCores", header: "NE Cores", description: "Number of cores in the Neural Engine, Apple's ML accelerator.", cell: (i) => fmt(i.getValue()) },
-  { accessorKey: "neuralEngineTOPS", header: "TOPS", description: "Neural Engine throughput in tera-operations per second. Higher = faster on-device ML.", filter: { type: "range" }, cell: (i) => fmt(i.getValue()) },
-  { accessorKey: "maxUnifiedMemoryGB", header: "Max RAM", description: "Maximum configurable unified memory, shared between CPU, GPU, and Neural Engine.", filter: { type: "range-discrete" }, cell: (i) => fmt(i.getValue(), " GB") },
-  { accessorKey: "memoryBandwidthGBs", header: "Bandwidth", description: "Peak unified memory bandwidth in GB/s. Higher bandwidth reduces memory-bound bottlenecks.", filter: { type: "range-discrete" }, cell: (i) => fmt(i.getValue(), " GB/s") },
-  { accessorKey: "transistorsBillions", header: "Transistors", description: "Total transistor count in billions. A rough proxy for die complexity and capability.", cell: (i) => fmt(i.getValue(), "B") },
-  { accessorKey: "thunderbolt", header: "TB", description: "Thunderbolt generation supported. TB4 = 40 Gb/s, TB5 = 80 Gb/s.", filter: { type: "set" } },
+  {
+    accessorKey: "chip",
+    header: "Chip",
+    description: "Official Apple marketing name of the chip (e.g. M3 Pro, M4 Max).",
+  },
+  {
+    accessorKey: "generation",
+    header: "Gen",
+    description: "Apple silicon generation: M1, M2, M3, M4, or M5.",
+    filter: { type: "set" },
+  },
+  {
+    accessorKey: "tier",
+    header: "Tier",
+    description: "Performance tier within a generation: Base, Pro, Max, or Ultra.",
+    filter: { type: "set" },
+  },
+  {
+    accessorKey: "year",
+    header: "Year",
+    description: "Year the chip was announced or first shipped in a Mac.",
+    filter: { type: "range" },
+  },
+  {
+    accessorKey: "processNode",
+    header: "Process",
+    description:
+      "TSMC fabrication process node (e.g. 5nm, 3nm). Smaller is newer and more efficient.",
+  },
+  {
+    accessorKey: "cpuCores",
+    header: "CPU Cores",
+    description: "Total CPU cores = performance cores + efficiency cores.",
+    filter: { type: "range" },
+    cell: (i) => fmt(i.getValue()),
+  },
+  {
+    accessorKey: "perfCores",
+    header: "Perf",
+    description: "High-performance CPU cores used for demanding single-threaded work.",
+    filter: { type: "range" },
+    cell: (i) => fmt(i.getValue()),
+  },
+  {
+    accessorKey: "efficiencyCores",
+    header: "Eff",
+    description: "High-efficiency CPU cores used for background and low-power tasks.",
+    filter: { type: "range" },
+    cell: (i) => fmt(i.getValue()),
+  },
+  {
+    accessorKey: "gpuCores",
+    header: "GPU Cores",
+    description: "Number of GPU cores. More cores = more graphics and parallel compute throughput.",
+    filter: { type: "range" },
+    cell: (i) => fmt(i.getValue()),
+  },
+  {
+    accessorKey: "neuralEngineCores",
+    header: "NE Cores",
+    description: "Number of cores in the Neural Engine, Apple's ML accelerator.",
+    cell: (i) => fmt(i.getValue()),
+  },
+  {
+    accessorKey: "neuralEngineTOPS",
+    header: "TOPS",
+    description:
+      "Neural Engine throughput in tera-operations per second. Higher = faster on-device ML.",
+    filter: { type: "range" },
+    cell: (i) => fmt(i.getValue()),
+  },
+  {
+    accessorKey: "maxUnifiedMemoryGB",
+    header: "Max RAM",
+    description: "Maximum configurable unified memory, shared between CPU, GPU, and Neural Engine.",
+    filter: { type: "range-discrete" },
+    cell: (i) => fmt(i.getValue(), " GB"),
+  },
+  {
+    accessorKey: "memoryBandwidthGBs",
+    header: "Bandwidth",
+    description:
+      "Peak unified memory bandwidth in GB/s. Higher bandwidth reduces memory-bound bottlenecks.",
+    filter: { type: "range-discrete" },
+    cell: (i) => fmt(i.getValue(), " GB/s"),
+  },
+  {
+    accessorKey: "transistorsBillions",
+    header: "Transistors",
+    description:
+      "Total transistor count in billions. A rough proxy for die complexity and capability.",
+    cell: (i) => fmt(i.getValue(), "B"),
+  },
+  {
+    accessorKey: "thunderbolt",
+    header: "TB",
+    description: "Thunderbolt generation supported. TB4 = 40 Gb/s, TB5 = 80 Gb/s.",
+    filter: { type: "set" },
+  },
 ];
 
 // Default visible subset. The rest are available in the Columns popover.
@@ -91,7 +175,11 @@ const COLUMNS: Column[] = COLUMN_DEFS.map((c): Column => {
 
 // Subtle per-generation text tint (kept inline because it's data, not theme).
 const GEN_COLOR: Record<Chip["generation"], string> = {
-  M1: "#999", M2: "#bbb", M3: "#5fc8ff", M4: "#5fffb0", M5: "#ff5fff",
+  M1: "#999",
+  M2: "#bbb",
+  M3: "#5fc8ff",
+  M4: "#5fffb0",
+  M5: "#ff5fff",
 };
 const TB_COLOR: Record<Chip["thunderbolt"], string> = {
   TB3: "#aaa",
@@ -104,12 +192,14 @@ function downloadCSV(data: Chip[]): void {
   const csv = [
     keys.join(","),
     ...data.map((row) =>
-      keys.map((k) => {
-        const v = row[k as keyof Chip];
-        if (v === null || v === undefined) return "N/A";
-        const s = String(v);
-        return s.includes(",") ? `"${s}"` : s;
-      }).join(",")
+      keys
+        .map((k) => {
+          const v = row[k as keyof Chip];
+          if (v === null || v === undefined) return "N/A";
+          const s = String(v);
+          return s.includes(",") ? `"${s}"` : s;
+        })
+        .join(",")
     ),
   ].join("\n");
   const a = Object.assign(document.createElement("a"), {
@@ -132,39 +222,66 @@ function defaultFilterValue(col: Column): FilterValue | undefined {
 function isFilterActive(col: Column, value: FilterValue | undefined): boolean {
   if (!col.filter || value === undefined) return false;
   if (col.filter.type === "set" && value instanceof Set) return value.size > 0;
-  if ((col.filter.type === "range" || col.filter.type === "range-discrete") && Array.isArray(value)) {
+  if (
+    (col.filter.type === "range" || col.filter.type === "range-discrete") &&
+    Array.isArray(value)
+  ) {
     return value[0] !== col.filter.min || value[1] !== col.filter.max;
   }
   return false;
 }
 
-function FilterDialog({ col, value, onChange, onClose }: { col: Column; value: FilterValue | undefined; onChange: (next: FilterValue | undefined) => void; onClose: () => void }) {
+function FilterDialog({
+  col,
+  value,
+  onChange,
+  onClose,
+}: {
+  col: Column;
+  value: FilterValue | undefined;
+  onChange: (next: FilterValue | undefined) => void;
+  onClose: () => void;
+}) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const posthog = usePostHog();
   const filter: ColumnFilter | undefined = col.filter;
   const isRange = filter?.type === "range";
   const isDiscrete = filter?.type === "range-discrete";
   const [working, setWorking] = useState<Set<string> | null>(
-    filter?.type === "set" ? (value instanceof Set ? value : (defaultFilterValue(col) as Set<string>) ?? new Set<string>()) : null
+    filter?.type === "set"
+      ? value instanceof Set
+        ? value
+        : ((defaultFilterValue(col) as Set<string>) ?? new Set<string>())
+      : null
   );
   // String mirrors of the range inputs so the user can leave them empty while typing.
   const [minStr, setMinStr] = useState<string>(
-    isRange ? String((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[0]) : ""
+    isRange
+      ? String((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[0])
+      : ""
   );
   const [maxStr, setMaxStr] = useState<string>(
-    isRange ? String((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[1]) : ""
+    isRange
+      ? String((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[1])
+      : ""
   );
   // For range-discrete, the bound is either "" (no bound = data min/max) or a
   // stringified entry from col.filter.values. String lets the "Any" option
   // round-trip cleanly through the <select>.
   const [minDiscrete, setMinDiscrete] = useState<string>(
     isDiscrete && filter
-      ? ((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[0] === filter.min ? "" : String((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[0]))
+      ? (Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[0] ===
+        filter.min
+        ? ""
+        : String((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[0])
       : ""
   );
   const [maxDiscrete, setMaxDiscrete] = useState<string>(
     isDiscrete && filter
-      ? ((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[1] === filter.max ? "" : String((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[1]))
+      ? (Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[1] ===
+        filter.max
+        ? ""
+        : String((Array.isArray(value) ? value : (defaultFilterValue(col) as [number, number]))[1])
       : ""
   );
 
@@ -176,7 +293,9 @@ function FilterDialog({ col, value, onChange, onClose }: { col: Column; value: F
     dlg.addEventListener("close", handleClose);
     // jsdom doesn't fire a cancel event on Esc; real browsers do. Belt and
     // suspenders: also call close() explicitly on Esc, idempotent in either env.
-    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape" && dlg.open) dlg.close(); };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && dlg.open) dlg.close();
+    };
     document.addEventListener("keydown", handleKey);
     return () => {
       dlg.removeEventListener("close", handleClose);
@@ -250,7 +369,8 @@ function FilterDialog({ col, value, onChange, onClose }: { col: Column; value: F
                     checked={checked}
                     onChange={() => {
                       const next = new Set(working);
-                      if (next.has(v)) next.delete(v); else next.add(v);
+                      if (next.has(v)) next.delete(v);
+                      else next.add(v);
                       setWorking(next);
                     }}
                     className="checkbox checkbox-sm checkbox-success"
@@ -264,7 +384,10 @@ function FilterDialog({ col, value, onChange, onClose }: { col: Column; value: F
           <>
             <div className="flex gap-3 mb-1">
               <div className="flex-1">
-                <label htmlFor="filter-min" className="block text-xs uppercase tracking-widest text-base-content/60 mb-1">
+                <label
+                  htmlFor="filter-min"
+                  className="block text-xs uppercase tracking-widest text-base-content/60 mb-1"
+                >
                   Min
                 </label>
                 <input
@@ -277,7 +400,10 @@ function FilterDialog({ col, value, onChange, onClose }: { col: Column; value: F
                 />
               </div>
               <div className="flex-1">
-                <label htmlFor="filter-max" className="block text-xs uppercase tracking-widest text-base-content/60 mb-1">
+                <label
+                  htmlFor="filter-max"
+                  className="block text-xs uppercase tracking-widest text-base-content/60 mb-1"
+                >
                   Max
                 </label>
                 <input
@@ -294,43 +420,53 @@ function FilterDialog({ col, value, onChange, onClose }: { col: Column; value: F
             </div>
           </>
         ) : (
-          <>
-            <div className="flex gap-3 mb-1">
-              <div className="flex-1">
-                <label htmlFor="filter-min" className="block text-xs uppercase tracking-widest text-base-content/60 mb-1">
-                  Min
-                </label>
-                <select
-                  id="filter-min"
-                  autoFocus
-                  value={minDiscrete}
-                  onChange={(e) => setMinDiscrete(e.target.value)}
-                  className="select select-bordered select-sm w-full font-mono"
-                >
-                  <option value="">Any</option>
-                  {filter.type === "range-discrete" && filter.values.map((v) => (
-                    <option key={v} value={String(v)}>{v}</option>
+          <div className="flex gap-3 mb-1">
+            <div className="flex-1">
+              <label
+                htmlFor="filter-min"
+                className="block text-xs uppercase tracking-widest text-base-content/60 mb-1"
+              >
+                Min
+              </label>
+              <select
+                id="filter-min"
+                autoFocus
+                value={minDiscrete}
+                onChange={(e) => setMinDiscrete(e.target.value)}
+                className="select select-bordered select-sm w-full font-mono"
+              >
+                <option value="">Any</option>
+                {filter.type === "range-discrete" &&
+                  filter.values.map((v) => (
+                    <option key={v} value={String(v)}>
+                      {v}
+                    </option>
                   ))}
-                </select>
-              </div>
-              <div className="flex-1">
-                <label htmlFor="filter-max" className="block text-xs uppercase tracking-widest text-base-content/60 mb-1">
-                  Max
-                </label>
-                <select
-                  id="filter-max"
-                  value={maxDiscrete}
-                  onChange={(e) => setMaxDiscrete(e.target.value)}
-                  className="select select-bordered select-sm w-full font-mono"
-                >
-                  <option value="">Any</option>
-                  {filter.type === "range-discrete" && filter.values.map((v) => (
-                    <option key={v} value={String(v)}>{v}</option>
-                  ))}
-                </select>
-              </div>
+              </select>
             </div>
-          </>
+            <div className="flex-1">
+              <label
+                htmlFor="filter-max"
+                className="block text-xs uppercase tracking-widest text-base-content/60 mb-1"
+              >
+                Max
+              </label>
+              <select
+                id="filter-max"
+                value={maxDiscrete}
+                onChange={(e) => setMaxDiscrete(e.target.value)}
+                className="select select-bordered select-sm w-full font-mono"
+              >
+                <option value="">Any</option>
+                {filter.type === "range-discrete" &&
+                  filter.values.map((v) => (
+                    <option key={v} value={String(v)}>
+                      {v}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
         )}
 
         <div className="modal-action mt-2">
@@ -339,7 +475,13 @@ function FilterDialog({ col, value, onChange, onClose }: { col: Column; value: F
           </button>
           <button
             type="button"
-            onClick={isRange ? commitRange : isDiscrete ? commitDiscrete : () => commit(working ?? undefined)}
+            onClick={
+              isRange
+                ? commitRange
+                : isDiscrete
+                  ? commitDiscrete
+                  : () => commit(working ?? undefined)
+            }
             className="btn btn-sm btn-success"
           >
             Done
@@ -347,13 +489,23 @@ function FilterDialog({ col, value, onChange, onClose }: { col: Column; value: F
         </div>
       </div>
       <form method="dialog" className="modal-backdrop">
-        <button>close</button>
+        <button type="button">close</button>
       </form>
     </dialog>
   );
 }
 
-function ColumnsPopover({ all, visible, onToggle, onClose }: { all: Column[]; visible: Set<string>; onToggle: (key: Column["accessorKey"]) => void; onClose: () => void }) {
+function ColumnsPopover({
+  all,
+  visible,
+  onToggle,
+  onClose,
+}: {
+  all: Column[];
+  visible: Set<string>;
+  onToggle: (key: Column["accessorKey"]) => void;
+  onClose: () => void;
+}) {
   const ref = useRef<HTMLDialogElement | null>(null);
   const posthog = usePostHog();
 
@@ -362,7 +514,9 @@ function ColumnsPopover({ all, visible, onToggle, onClose }: { all: Column[]; vi
     if (!dlg) return;
     if (!dlg.open) dlg.showModal();
     const handleClose = () => onClose();
-    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape" && dlg.open) dlg.close(); };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && dlg.open) dlg.close();
+    };
     dlg.addEventListener("close", handleClose);
     document.addEventListener("keydown", handleKey);
     return () => {
@@ -374,9 +528,7 @@ function ColumnsPopover({ all, visible, onToggle, onClose }: { all: Column[]; vi
   return (
     <dialog ref={ref} aria-label="Choose columns" className="modal">
       <div className="modal-box max-w-xs p-4">
-        <div className="text-xs uppercase tracking-widest text-base-content/60 mb-3">
-          Columns
-        </div>
+        <div className="text-xs uppercase tracking-widest text-base-content/60 mb-3">Columns</div>
         <div className="flex flex-col gap-2">
           {all.map((col) => (
             <label key={col.accessorKey} className="label cursor-pointer gap-3 justify-start py-1">
@@ -398,7 +550,7 @@ function ColumnsPopover({ all, visible, onToggle, onClose }: { all: Column[]; vi
         </div>
       </div>
       <form method="dialog" className="modal-backdrop">
-        <button>close</button>
+        <button type="button">close</button>
       </form>
     </dialog>
   );
@@ -409,8 +561,12 @@ export default function AppleSiliconTable() {
 
   // All view state is hydrated from the URL on first render. Subsequent
   // changes flow state → URL via useEffect, and URL → state via popstate.
-  const [search, setSearch] = useState<string>(() => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).q);
-  const [sorting, setSorting] = useState<SortItem[]>(() => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).sorting);
+  const [search, setSearch] = useState<string>(
+    () => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).q
+  );
+  const [sorting, setSorting] = useState<SortItem[]>(
+    () => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).sorting
+  );
   const [visibleCols, setVisibleCols] = useState<Set<string>>(
     () => parseState(window.location.search, COLUMNS, DEFAULT_VISIBLE).visibleCols
   );
@@ -504,7 +660,10 @@ export default function AppleSiliconTable() {
           const v = c[key];
           if (typeof v !== "string") return false;
           if (f.size > 0 && !f.has(v)) return false;
-        } else if ((col.filter?.type === "range" || col.filter?.type === "range-discrete") && Array.isArray(f)) {
+        } else if (
+          (col.filter?.type === "range" || col.filter?.type === "range-discrete") &&
+          Array.isArray(f)
+        ) {
           const v = c[key];
           if (v === null || v === undefined) return false;
           if (typeof v !== "number") return false;
@@ -518,8 +677,8 @@ export default function AppleSiliconTable() {
   function handleSortingChange(updater: SortItem[] | ((old: SortItem[]) => SortItem[])) {
     const next = typeof updater === "function" ? updater(sorting) : updater;
     setSorting(next);
-    if (next.length > 0) {
-      const first = next[0]!;
+    const first = next[0];
+    if (first) {
       posthog?.capture("column_sorted", {
         column_key: first.id,
         sort_direction: first.desc ? "desc" : "asc",
@@ -536,18 +695,21 @@ export default function AppleSiliconTable() {
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const activeFilterCol = activeFilterKey ? COLUMNS.find((c) => c.accessorKey === activeFilterKey) ?? null : null;
+  const activeFilterCol = activeFilterKey
+    ? (COLUMNS.find((c) => c.accessorKey === activeFilterKey) ?? null)
+    : null;
 
   // Human-readable summary of the current view state (what the filters,
   // search, sort, and visible columns are doing). Replaces the static
   // subtitle so a shared link is understandable at a glance.
   const summary = useMemo(
-    () => summarizeState(
-      { q: search, sorting, visibleCols, columnFilters },
-      COLUMNS,
-      DEFAULT_VISIBLE,
-      chips.length
-    ),
+    () =>
+      summarizeState(
+        { q: search, sorting, visibleCols, columnFilters },
+        COLUMNS,
+        DEFAULT_VISIBLE,
+        chips.length
+      ),
     [search, sorting, visibleCols, columnFilters]
   );
 
@@ -557,7 +719,6 @@ export default function AppleSiliconTable() {
     document.title = buildTitle(
       { q: search, sorting, visibleCols, columnFilters },
       COLUMNS,
-      DEFAULT_VISIBLE,
       chips.length,
       filtered.length
     );
@@ -566,7 +727,8 @@ export default function AppleSiliconTable() {
   function toggleColumn(key: Column["accessorKey"]) {
     setVisibleCols((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -614,11 +776,7 @@ export default function AppleSiliconTable() {
             }
           }}
         />
-        <button
-          type="button"
-          onClick={() => setColumnsOpen(true)}
-          className="btn btn-sm btn-ghost"
-        >
+        <button type="button" onClick={() => setColumnsOpen(true)} className="btn btn-sm btn-ghost">
           ⠿ Columns
         </button>
         <button
@@ -654,7 +812,11 @@ export default function AppleSiliconTable() {
                         className={h.column.getCanSort() ? "cursor-pointer" : "cursor-default"}
                       >
                         {flexRender(colDef.header, h.getContext())}
-                        {h.column.getIsSorted() === "asc" ? " ↑" : h.column.getIsSorted() === "desc" ? " ↓" : ""}
+                        {h.column.getIsSorted() === "asc"
+                          ? " ↑"
+                          : h.column.getIsSorted() === "desc"
+                            ? " ↓"
+                            : ""}
                       </span>
                       {colDef.filter && (
                         <button
@@ -704,24 +866,56 @@ export default function AppleSiliconTable() {
                     {row.getVisibleCells().map((cell) => {
                       const col = cell.column.id;
                       const val = cell.getValue();
-                      let content;
+                      let content: React.ReactNode;
                       if (col === "chip") {
-                        content = <span className="font-bold text-base-content tracking-wide">{val as string}</span>;
+                        content = (
+                          <span className="font-bold text-base-content tracking-wide">
+                            {val as string}
+                          </span>
+                        );
                       } else if (col === "tier") {
                         const variant = TIER_BADGE[tier] ?? "badge-ghost";
-                        content = <span className={`badge badge-md ${variant} badge-soft font-semibold`}>{val as string}</span>;
+                        content = (
+                          <span className={`badge badge-md ${variant} badge-soft font-semibold`}>
+                            {val as string}
+                          </span>
+                        );
                       } else if (col === "generation") {
-                        content = <span className="font-semibold" style={{ color: GEN_COLOR[gen] ?? undefined }}>{val as string}</span>;
+                        content = (
+                          <span
+                            className="font-semibold"
+                            style={{ color: GEN_COLOR[gen] ?? undefined }}
+                          >
+                            {val as string}
+                          </span>
+                        );
                       } else if (col === "thunderbolt") {
-                        content = <span className="font-semibold" style={{ color: TB_COLOR[val as Chip["thunderbolt"]] ?? undefined }}>{val as string}</span>;
+                        content = (
+                          <span
+                            className="font-semibold"
+                            style={{ color: TB_COLOR[val as Chip["thunderbolt"]] ?? undefined }}
+                          >
+                            {val as string}
+                          </span>
+                        );
                       } else {
                         content = (
-                          <span className={val === null || val === undefined ? "text-base-content/30" : "text-base-content/80"}>
+                          <span
+                            className={
+                              val === null || val === undefined
+                                ? "text-base-content/30"
+                                : "text-base-content/80"
+                            }
+                          >
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           </span>
                         );
                       }
-                      return <td key={cell.id} className="whitespace-nowrap">{content}</td>;
+                      return (
+                        <td key={cell.id} className="whitespace-nowrap">
+                          {content}
+                        </td>
+                      );
                     })}
                   </tr>
                 );
@@ -732,7 +926,8 @@ export default function AppleSiliconTable() {
       </div>
 
       <div className="mt-3 text-sm text-base-content/50">
-        Click a column header to sort · Click ▾ on a column to filter · Pick columns to show from the top bar
+        Click a column header to sort · Click ▾ on a column to filter · Pick columns to show from
+        the top bar
       </div>
 
       {activeFilterCol && (

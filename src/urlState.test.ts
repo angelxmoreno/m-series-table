@@ -1,21 +1,28 @@
-import { describe, it, expect, vi } from "vitest";
-import {
-  parseState,
-  serializeState,
-  applyToHistory,
-  statesEqual,
-} from "./urlState";
+import { describe, expect, it, vi } from "vitest";
 import type { Column, ViewState } from "./types";
+import { applyToHistory, parseState, serializeState, statesEqual } from "./urlState";
 
 // Minimal stub matching the augmented column shape AppleSiliconTable produces.
 // We test urlState in isolation — no need to load the real chips.json.
 const COLUMNS: Column[] = [
   { accessorKey: "chip", header: "Chip" },
-  { accessorKey: "generation", header: "Gen", filter: { type: "set", values: ["M1", "M2", "M3", "M4", "M5"] } },
-  { accessorKey: "tier", header: "Tier", filter: { type: "set", values: ["Base", "Pro", "Max", "Ultra"] } },
+  {
+    accessorKey: "generation",
+    header: "Gen",
+    filter: { type: "set", values: ["M1", "M2", "M3", "M4", "M5"] },
+  },
+  {
+    accessorKey: "tier",
+    header: "Tier",
+    filter: { type: "set", values: ["Base", "Pro", "Max", "Ultra"] },
+  },
   { accessorKey: "year", header: "Year", filter: { type: "range", min: 2020, max: 2026 } },
   { accessorKey: "cpuCores", header: "CPU Cores", filter: { type: "range", min: 8, max: 32 } },
-  { accessorKey: "thunderbolt", header: "TB", filter: { type: "set", values: ["TB3", "TB4", "TB5"] } },
+  {
+    accessorKey: "thunderbolt",
+    header: "TB",
+    filter: { type: "set", values: ["TB3", "TB4", "TB5"] },
+  },
 ];
 
 const DEFAULT_VISIBLE = ["chip", "generation", "tier", "year", "cpuCores"];
@@ -328,7 +335,11 @@ describe("statesEqual", () => {
 describe("parseState — range-discrete filters", () => {
   const DISCRETE_COLUMNS: Column[] = [
     ...COLUMNS,
-    { accessorKey: "maxRAM", header: "Max RAM", filter: { type: "range-discrete", values: [16, 24, 32, 64, 96, 128, 192], min: 16, max: 192 } },
+    {
+      accessorKey: "maxRAM",
+      header: "Max RAM",
+      filter: { type: "range-discrete", values: [16, 24, 32, 64, 96, 128, 192], min: 16, max: 192 },
+    },
   ];
 
   it("reads a fully-bounded range", () => {
@@ -363,7 +374,11 @@ describe("parseState — range-discrete filters", () => {
 describe("serializeState — range-discrete filters", () => {
   const DISCRETE_COLUMNS: Column[] = [
     ...COLUMNS,
-    { accessorKey: "maxRAM", header: "Max RAM", filter: { type: "range-discrete", values: [16, 24, 32, 64, 96, 128, 192], min: 16, max: 192 } },
+    {
+      accessorKey: "maxRAM",
+      header: "Max RAM",
+      filter: { type: "range-discrete", values: [16, 24, 32, 64, 96, 128, 192], min: 16, max: 192 },
+    },
   ];
 
   it("emits a fully-bounded range", () => {
@@ -391,7 +406,11 @@ describe("serializeState — range-discrete filters", () => {
 describe("round-trip — range-discrete", () => {
   const DISCRETE_COLUMNS: Column[] = [
     ...COLUMNS,
-    { accessorKey: "maxRAM", header: "Max RAM", filter: { type: "range-discrete", values: [16, 24, 32, 64, 96, 128, 192], min: 16, max: 192 } },
+    {
+      accessorKey: "maxRAM",
+      header: "Max RAM",
+      filter: { type: "range-discrete", values: [16, 24, 32, 64, 96, 128, 192], min: 16, max: 192 },
+    },
   ];
 
   it("state → URL → state preserves a discrete range", () => {
